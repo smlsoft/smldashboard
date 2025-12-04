@@ -15,6 +15,26 @@ import { StockByBranchChart } from '@/components/inventory/StockByBranchChart';
 import { Package, AlertTriangle, AlertCircle, TrendingDown } from 'lucide-react';
 import { getDateRange } from '@/lib/dateRanges';
 import type { DateRange, InventoryKPIs, StockMovement, LowStockItem, OverstockItem, SlowMovingItem, InventoryTurnover, StockByBranch } from '@/lib/data/types';
+import { 
+  getInventoryKPIs, 
+  getStockMovement, 
+  getLowStockItems,
+  getOverstockItems,
+  getSlowMovingItems,
+  getInventoryTurnover,
+  getStockByBranch,
+  // Query Functions for SQL popup
+  getInventoryValueQuery,
+  getTotalItemsQuery,
+  getLowStockCountQuery,
+  getOverstockCountQuery,
+  getStockMovementQuery,
+  getLowStockItemsQuery,
+  getOverstockItemsQuery,
+  getSlowMovingItemsQuery,
+  getInventoryTurnoverQuery,
+  getStockByBranchQuery,
+} from '@/lib/data/inventory';
 
 export default function InventoryPage() {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRange('THIS_MONTH'));
@@ -150,11 +170,19 @@ export default function InventoryPage() {
             title="มูลค่าสินค้าคงคลัง"
             value={formatCurrency(kpis.totalInventoryValue.value)}
             icon={Package}
+            queryInfo={{
+              query: getInventoryValueQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
           />
           <KPICard
             title="จำนวนรายการสินค้า"
             value={formatNumber(kpis.totalItemsInStock.value)}
             icon={Package}
+            queryInfo={{
+              query: getTotalItemsQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
           />
           <KPICard
             title="สินค้าใกล้หมด"
@@ -162,6 +190,10 @@ export default function InventoryPage() {
             icon={AlertTriangle}
             trendUp={false}
             className={kpis.lowStockAlerts.value > 0 ? 'border-yellow-500/50' : ''}
+            queryInfo={{
+              query: getLowStockCountQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
           />
           <KPICard
             title="สินค้าเกินคลัง"
@@ -169,6 +201,10 @@ export default function InventoryPage() {
             icon={AlertCircle}
             trendUp={false}
             className={kpis.overstockAlerts.value > 0 ? 'border-orange-500/50' : ''}
+            queryInfo={{
+              query: getOverstockCountQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
           />
         </div>
       ) : null}
@@ -178,6 +214,10 @@ export default function InventoryPage() {
         <DataCard
           title="การเคลื่อนไหวสต็อก"
           description="จำนวนสินค้ารับเข้าและจ่ายออกรายวัน"
+          queryInfo={{
+             query: getStockMovementQuery(dateRange.start, dateRange.end),
+             format: 'JSONEachRow',
+          }}
         >
           {loading ? (
             <ChartSkeleton />
@@ -190,21 +230,35 @@ export default function InventoryPage() {
       {/* Low Stock & Overstock */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard title="สินค้าใกล้หมด" description="รายการสินค้าที่ต่ำกว่าจุด Reorder Point">
+          <DataCard 
+              title="สินค้าใกล้หมด"
+              description="รายการสินค้าที่ต่ำกว่าจุด Reorder Point"
+              queryInfo={{
+                query: getLowStockItemsQuery(asOfDate),
+                format: 'JSONEachRow',
+              }}
+          >
             {loading ? (
               <TableSkeleton rows={10} />
             ) : (
-              <LowStockTable data={lowStockItems} />
+              <LowStockTable data={lowStockItems} height="680px" />
             )}
           </DataCard>
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard title="สินค้าเกินคลัง" description="รายการสินค้าที่เกินระดับสูงสุด">
+          <DataCard 
+          title="สินค้าเกินคลัง" 
+          description="รายการสินค้าที่เกินระดับสูงสุด"
+          queryInfo={{
+            query: getOverstockItemsQuery(asOfDate),
+            format: 'JSONEachRow',
+          }}
+          >
             {loading ? (
               <TableSkeleton rows={10} />
             ) : (
-              <OverstockTable data={overstockItems} />
+              <OverstockTable data={overstockItems} height="400px"/>
             )}
           </DataCard>
         </ErrorBoundary>
@@ -212,11 +266,18 @@ export default function InventoryPage() {
 
       {/* Slow Moving Items */}
       <ErrorBoundary>
-        <DataCard title="สินค้าหมุนเวียนช้า" description="รายการสินค้าที่มีสต็อกคงค้างนานกว่า 90 วัน">
+        <DataCard 
+        title="สินค้าหมุนเวียนช้า" 
+        description="รายการสินค้าที่มีสต็อกคงค้างนานกว่า 90 วัน"
+        queryInfo={{
+          query: getSlowMovingItemsQuery(dateRange.start, dateRange.end, asOfDate),
+          format: 'JSONEachRow',
+        }}
+        >
           {loading ? (
             <TableSkeleton rows={10} />
           ) : (
-            <SlowMovingTable data={slowMovingItems} />
+            <SlowMovingTable data={slowMovingItems}height="680px" />
           )}
         </DataCard>
       </ErrorBoundary>
@@ -224,7 +285,14 @@ export default function InventoryPage() {
       {/* Inventory Turnover & Stock by Branch */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard title="อัตราหมุนเวียนสินค้า" description="การหมุนเวียนและวันขายหมดตามหมวดสินค้า">
+          <DataCard 
+          title="อัตราหมุนเวียนสินค้า" 
+          description="การหมุนเวียนและวันขายหมดตามหมวดสินค้า"
+          queryInfo={{
+            query: getInventoryTurnoverQuery(dateRange.start, dateRange.end, asOfDate),
+            format: 'JSONEachRow',
+          }}
+          > 
             {loading ? (
               <ChartSkeleton />
             ) : (
@@ -234,7 +302,14 @@ export default function InventoryPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard title="สต็อกแยกตามสาขา" description="มูลค่าและจำนวนรายการสินค้าในแต่ละสาขา">
+          <DataCard 
+          title="สต็อกแยกตามสาขา" 
+          description="มูลค่าและจำนวนรายการสินค้าในแต่ละสาขา"
+          queryInfo={{
+            query: getStockByBranchQuery(asOfDate),
+            format: 'JSONEachRow',
+          }}
+            >
             {loading ? (
               <ChartSkeleton />
             ) : (

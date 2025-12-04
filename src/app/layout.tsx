@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
-import { Header } from "@/components/Header";
+import { MainLayout } from "@/components/MainLayout";
 import { PermissionProvider } from "@/lib/permissions";
 
 const inter = Inter({
@@ -26,15 +25,9 @@ export default function RootLayout({
         className={`${inter.variable} antialiased bg-[hsl(var(--background))] text-[hsl(var(--foreground))]`}
       >
         <PermissionProvider>
-          <div className="min-h-screen flex">
-            <Sidebar />
-            <div className="flex-1 flex flex-col ml-72 transition-all duration-300">
-              <Header />
-              <main className="flex-1 p-8 lg:p-12 max-w-7xl mx-auto w-full">
-                {children}
-              </main>
-            </div>
-          </div>
+          <MainLayout>
+            {children}
+          </MainLayout>
         </PermissionProvider>
       </body>
     </html>

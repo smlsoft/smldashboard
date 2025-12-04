@@ -16,6 +16,20 @@ import { Wallet, CreditCard, PiggyBank, TrendingUp, TrendingDown } from 'lucide-
 import { getDateRange } from '@/lib/dateRanges';
 import { formatGrowthPercentage } from '@/lib/comparison';
 import type { DateRange, AccountingKPIs, ProfitLossData, BalanceSheetItem, CashFlowData, AgingItem, CategoryBreakdown } from '@/lib/data/types';
+import { 
+  getAssetsQuery, 
+  getLiabilitiesQuery, 
+  getEquityQuery, 
+  getRevenueQuery, 
+  getExpensesQuery,
+  getProfitLossQuery,
+  getBalanceSheetQuery,
+  getCashFlowQuery,
+  getARAgingQuery,
+  getAPAgingQuery,
+  getRevenueBreakdownQuery,
+  getExpenseBreakdownQuery,
+} from '@/lib/data/accounting';
 
 export default function AccountingPage() {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRange('THIS_MONTH'));
@@ -141,6 +155,10 @@ export default function AccountingPage() {
             trend={formatGrowthPercentage(kpis.assets.growthPercentage || 0)}
             trendUp={kpis.assets.trend === 'up'}
             icon={Wallet}
+            queryInfo={{
+              query: getAssetsQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="หนี้สิน"
@@ -148,6 +166,10 @@ export default function AccountingPage() {
             trend={formatGrowthPercentage(kpis.liabilities.growthPercentage || 0)}
             trendUp={kpis.liabilities.trend === 'down'} // Down is good for liabilities
             icon={CreditCard}
+            queryInfo={{
+              query: getLiabilitiesQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="ทุน"
@@ -155,6 +177,10 @@ export default function AccountingPage() {
             trend={formatGrowthPercentage(kpis.equity.growthPercentage || 0)}
             trendUp={kpis.equity.trend === 'up'}
             icon={PiggyBank}
+            queryInfo={{
+              query: getEquityQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="รายได้"
@@ -162,6 +188,10 @@ export default function AccountingPage() {
             trend={formatGrowthPercentage(kpis.revenue.growthPercentage || 0)}
             trendUp={kpis.revenue.trend === 'up'}
             icon={TrendingUp}
+            queryInfo={{
+              query: getRevenueQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="ค่าใช้จ่าย"
@@ -169,6 +199,10 @@ export default function AccountingPage() {
             trend={formatGrowthPercentage(kpis.expenses.growthPercentage || 0)}
             trendUp={kpis.expenses.trend === 'down'} // Down is good for expenses
             icon={TrendingDown}
+            queryInfo={{
+              query: getExpensesQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
         </div>
       ) : null}
@@ -178,6 +212,10 @@ export default function AccountingPage() {
         <DataCard
           title="กำไร(ขาดทุน) สุทธิ"
           description="เปรียบเทียบรายได้ ค่าใช้จ่าย และกำไรสุทธิรายเดือน"
+          queryInfo={{
+            query: getProfitLossQuery(dateRange),
+            format: 'JSONEachRow'
+          }}
         >
           {loading ? (
             <ChartSkeleton />
@@ -190,7 +228,14 @@ export default function AccountingPage() {
       {/* Balance Sheet & Cash Flow */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard title="งบดุล" description="สินทรัพย์ หนี้สิน และส่วนของผู้ถือหุ้น">
+          <DataCard 
+            title="งบดุล" 
+            description="สินทรัพย์ หนี้สิน และส่วนของผู้ถือหุ้น"
+            queryInfo={{
+              query: getBalanceSheetQuery(dateRange.end),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <ChartSkeleton height="350px" />
             ) : (
@@ -200,7 +245,14 @@ export default function AccountingPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard title="กระแสเงินสด" description="จากกิจกรรมดำเนินงาน ลงทุน และจัดหาเงิน">
+          <DataCard 
+            title="กระแสเงินสด" 
+            description="จากกิจกรรมดำเนินงาน ลงทุน และจัดหาเงิน"
+            queryInfo={{
+              query: getCashFlowQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <ChartSkeleton height="350px" />
             ) : (
@@ -213,7 +265,14 @@ export default function AccountingPage() {
       {/* AR & AP Aging */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard title="อายุลูกหนี้ (AR Aging)" description="รายการลูกหนี้ค้างชำระ">
+          <DataCard 
+            title="อายุลูกหนี้ (AR Aging)" 
+            description="รายการลูกหนี้ค้างชำระ"
+            queryInfo={{
+              query: getARAgingQuery(),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <TableSkeleton rows={8} />
             ) : (
@@ -223,7 +282,14 @@ export default function AccountingPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard title="อายุเจ้าหนี้ (AP Aging)" description="รายการเจ้าหนี้ค้างชำระ">
+          <DataCard 
+            title="อายุเจ้าหนี้ (AP Aging)" 
+            description="รายการเจ้าหนี้ค้างชำระ"
+            queryInfo={{
+              query: getAPAgingQuery(),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <TableSkeleton rows={8} />
             ) : (
@@ -235,7 +301,14 @@ export default function AccountingPage() {
 
       {/* Revenue & Expense Breakdown */}
       <ErrorBoundary>
-        <DataCard title="รายได้และค่าใช้จ่ายตามหมวด" description="สัดส่วนรายได้และค่าใช้จ่ายแยกตามประเภท">
+        <DataCard 
+          title="รายได้และค่าใช้จ่ายตามหมวด" 
+          description="สัดส่วนรายได้และค่าใช้จ่ายแยกตามประเภท"
+          queryInfo={{
+            query: `-- Revenue Breakdown\n${getRevenueBreakdownQuery(dateRange)}\n\n-- Expense Breakdown\n${getExpenseBreakdownQuery(dateRange)}`,
+            format: 'JSONEachRow'
+          }}
+        >
           {loading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartSkeleton height="300px" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Bell, Search, Menu } from 'lucide-react';
+import { Bell, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/utils';
 
@@ -32,10 +32,7 @@ export function Header() {
         <header className="h-16 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]/80 backdrop-blur-md sticky top-0 z-40 px-8 flex items-center justify-between">
             {/* Left: Breadcrumbs or Page Title (Placeholder for now) */}
             <div className="flex items-center gap-4">
-                <button className="lg:hidden p-2 -ml-2 rounded-md hover:bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]">
-                    <Menu className="h-5 w-5" />
-                </button>
-                <div className="hidden md:flex items-center text-sm text-[hsl(var(--muted-foreground))]">
+                <div className="flex items-center text-sm text-[hsl(var(--muted-foreground))]">
                     <span className="hover:text-[hsl(var(--foreground))] cursor-pointer transition-colors">Dashboard</span>
                     <span className="mx-2">/</span>
                     <span className="font-medium text-[hsl(var(--foreground))]">Overview</span>
