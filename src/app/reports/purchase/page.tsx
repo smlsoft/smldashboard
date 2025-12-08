@@ -7,7 +7,7 @@ import { ErrorBoundary, ErrorDisplay } from '@/components/ErrorBoundary';
 import { TableSkeleton } from '@/components/LoadingSkeleton';
 import { PaginatedTable, type ColumnDef } from '@/components/PaginatedTable';
 import { getDateRange } from '@/lib/dateRanges';
-import { exportToExcelWithHeaders } from '@/lib/exportExcel';
+import { exportStyledReport } from '@/lib/exportExcel';
 import type {
   DateRange,
   PurchaseTrendData,
@@ -16,6 +16,7 @@ import type {
   PurchaseByBrand,
   APOutstanding,
 } from '@/lib/data/types';
+import { getAvgOrderValueQuery } from '@/lib/data/sales';
 
 export default function PurchaseReportPage() {
   const [dateRange, setDateRange] = useState<DateRange>(
@@ -372,8 +373,8 @@ export default function PurchaseReportPage() {
       sortable: false,
       align: 'right',
       render: (item: APOutstanding) => {
-        const pct = item.totalOutstanding > 0 
-          ? (item.overdueAmount / item.totalOutstanding) * 100 
+        const pct = item.totalOutstanding > 0
+          ? (item.overdueAmount / item.totalOutstanding) * 100
           : 0;
         const color = pct >= 50 ? 'text-red-600' : pct >= 20 ? 'text-yellow-600' : 'text-green-600';
         return <span className={`font-medium ${color}`}>{pct.toFixed(1)}%</span>;
@@ -405,12 +406,23 @@ export default function PurchaseReportPage() {
           id="purchase-trend"
           title="แนวโน้มการจัดซื้อ"
           description="ยอดซื้อและจำนวน PO รายเดือน"
-          onExportExcel={() => exportToExcelWithHeaders(
-            trendData,
-            { month: 'เดือน', totalPurchases: 'ยอดซื้อ', poCount: 'จำนวน PO' },
-            'แนวโน้มการจัดซื้อ',
-            'Purchase Trend'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: trendData,
+            headers: { month: 'เดือน', totalPurchases: 'ยอดซื้อ', poCount: 'จำนวน PO', getAvgOrderValueQuery  : 'เฉลี่ยต่อ PO' },
+            filename: 'แนวโน้มการจัดซื้อ',
+            sheetName: 'Purchase Trend',
+            title: 'รายงานแนวโน้มการจัดซื้อ',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+            currencyColumns: ['totalPurchases', 'getAvgOrderValueQuery'],
+            numberColumns: ['poCount'],
+            summaryConfig: {
+              columns: {
+                totalPurchases: 'sum',
+                poCount: 'sum',
+                getAvgOrderValueQuery: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={6} />
@@ -423,6 +435,27 @@ export default function PurchaseReportPage() {
               defaultSortKey="month"
               defaultSortOrder="desc"
               keyExtractor={(item: PurchaseTrendData) => item.month}
+              showSummary={true}
+              summaryConfig={{
+                labelColSpan: 1,
+                values: {
+                  totalPurchases: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.totalPurchases, 0);
+                    return <span className="font-medium text-blue-600">฿{formatCurrency(total)}</span>;
+                  },
+                  poCount: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.poCount, 0);
+                    return <span className="font-medium">{formatNumber(total)}</span>;
+                  },
+                  avgPOValue: (data) => {
+                    const totalPurchases = data.reduce((sum, item) => sum + item.totalPurchases, 0);
+                    const totalPOs = data.reduce((sum, item) => sum + item.poCount, 0);
+                    const avg = totalPOs > 0 ? totalPurchases / totalPOs : 0;
+                    return <span className="font-medium">฿{formatCurrency(avg)}</span>; 
+                  } 
+
+                }
+              }}
             />
           )}
         </DataCard>
@@ -434,12 +467,23 @@ export default function PurchaseReportPage() {
           id="top-suppliers"
           title="ซัพพลายเออร์ยอดนิยม Top 20"
           description="ซัพพลายเออร์ที่มียอดซื้อสูงสุด"
-          onExportExcel={() => exportToExcelWithHeaders(
-            topSuppliers,
-            { supplierCode: 'รหัสซัพพลายเออร์', supplierName: 'ชื่อซัพพลายเออร์', poCount: 'จำนวน PO', totalPurchases: 'ยอดซื้อ' },
-            'ซัพพลายเออร์ยอดนิยม',
-            'Top Suppliers'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: topSuppliers,
+            headers: { supplierCode: 'รหัสซัพพลายเออร์', supplierName: 'ชื่อซัพพลายเออร์', poCount: 'จำนวน PO', totalPurchases: 'ยอดซื้อรวม', avgPOValue: 'เฉลี่ยต่อ PO', lastPurchaseDate: 'ซื้อล่าสุด' },
+            filename: 'ซัพพลายเออร์ยอดนิยม',
+            sheetName: 'Top Suppliers',
+            title: 'รายงานซัพพลายเออร์ยอดนิยม',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+            currencyColumns: ['totalPurchases', 'avgPOValue'],
+            numberColumns: ['poCount'],
+            summaryConfig: {
+              columns: {
+                totalPurchases: 'sum',
+                poCount: 'sum',
+                avgPOValue: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={10} />
@@ -452,11 +496,31 @@ export default function PurchaseReportPage() {
               defaultSortKey="totalPurchases"
               defaultSortOrder="desc"
               keyExtractor={(item: TopSupplier) => item.supplierCode}
+              showSummary={true}
+              summaryConfig={{
+                labelColSpan: 1,
+                values: {
+                  totalPurchases: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.totalPurchases, 0);
+                    return <span className="font-medium text-blue-600">฿{formatCurrency(total)}</span>;
+                  },
+                  poCount: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.poCount, 0);
+                    return <span className="font-medium">{formatNumber(total)}</span>;
+                  },
+                  avgPOValue: (data) => {
+                    const totalPurchases = data.reduce((sum, item) => sum + item.totalPurchases, 0);
+                    const totalPOs = data.reduce((sum, item) => sum + item.poCount, 0);
+                    const avg = totalPOs > 0 ? totalPurchases / totalPOs : 0;
+                    return <span className="font-medium">฿{formatCurrency(avg)}</span>; 
+                  }
+
+                }
+              }}
             />
           )}
         </DataCard>
       </ErrorBoundary>
-
       {/* Purchase by Category & Brand */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
@@ -464,12 +528,23 @@ export default function PurchaseReportPage() {
             id="by-category"
             title="การซื้อตามหมวดหมู่"
             description="ยอดซื้อแยกตามหมวดหมู่สินค้า"
-            onExportExcel={() => exportToExcelWithHeaders(
-              purchaseByCategory,
-              { categoryCode: 'รหัสหมวดหมู่', categoryName: 'ชื่อหมวดหมู่', uniqueItems: 'รายการสินค้า', totalPurchaseValue: 'มูลค่าซื้อ' },
-              'การซื้อตามหมวดหมู่',
-              'Purchase by Category'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: purchaseByCategory,
+              headers: { categoryCode: 'รหัสหมวดหมู่', categoryName: 'ชื่อหมวดหมู่', uniqueItems: 'รายการสินค้า', totalQty: 'จำนวน', totalPurchaseValue: 'มูลค่าซื้อ' },
+              filename: 'การซื้อตามหมวดหมู่',
+              sheetName: 'Purchase by Category',
+              title: 'รายงานการซื้อตามหมวดหมู่',
+              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+              currencyColumns: ['totalPurchaseValue'],
+              numberColumns: ['totalQty', 'uniqueItems'],
+              summaryConfig: {
+                columns: {
+                  totalQty: 'sum',
+                  uniqueItems: 'sum',
+                  totalPurchaseValue: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -482,6 +557,24 @@ export default function PurchaseReportPage() {
                 defaultSortKey="totalPurchaseValue"
                 defaultSortOrder="desc"
                 keyExtractor={(item: PurchaseByCategory) => item.categoryCode}
+                showSummary={true}
+                summaryConfig={{
+                  labelColSpan: 1,
+                  values: {
+                    totalQty: (data) => {
+                      const total = data.reduce((sum, item) => sum + item.totalQty, 0);
+                      return <span className="font-medium">{formatNumber(total)}</span>;
+                    },
+                    uniqueItems: (data) => {
+                      const total = data.reduce((sum, item) => sum + (item.uniqueItems || 0), 0);
+                      return <span className="font-medium">{formatNumber(total)}</span>;
+                    },
+                    totalPurchaseValue: (data) => {
+                      const total = data.reduce((sum, item) => sum + item.totalPurchaseValue, 0);
+                      return <span className="font-medium text-blue-600">฿{formatCurrency(total)}</span>;
+                    }
+                  }
+                }}
               />
             )}
           </DataCard>
@@ -492,12 +585,22 @@ export default function PurchaseReportPage() {
             id="by-brand"
             title="การซื้อตามแบรนด์"
             description="ยอดซื้อแยกตามแบรนด์สินค้า"
-            onExportExcel={() => exportToExcelWithHeaders(
-              purchaseByBrand,
-              { brandCode: 'รหัสแบรนด์', brandName: 'ชื่อแบรนด์', uniqueItems: 'รายการสินค้า', totalPurchaseValue: 'มูลค่าซื้อ' },
-              'การซื้อตามแบรนด์',
-              'Purchase by Brand'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: purchaseByBrand,
+              headers: { brandCode: 'รหัสแบรนด์', brandName: 'ชื่อแบรนด์', uniqueItems: 'รายการสินค้า', totalPurchaseValue: 'มูลค่าซื้อ' },
+              filename: 'การซื้อตามแบรนด์',
+              sheetName: 'Purchase by Brand',
+              title: 'รายงานการซื้อตามแบรนด์',
+              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+              currencyColumns: ['totalPurchaseValue'],
+              numberColumns: ['uniqueItems'],
+              summaryConfig: {
+                columns: {
+                  uniqueItems: 'sum',
+                  totalPurchaseValue: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -522,12 +625,23 @@ export default function PurchaseReportPage() {
           id="ap-outstanding"
           title="สถานะเจ้าหนี้การค้า (AP)"
           description="ยอดค้างชำระแยกตามซัพพลายเออร์"
-          onExportExcel={() => exportToExcelWithHeaders(
-            apOutstanding,
-            { supplierCode: 'รหัสซัพพลายเออร์', supplierName: 'ชื่อซัพพลายเออร์', docCount: 'จำนวนเอกสาร', totalOutstanding: 'ยอดค้างชำระ', overdueAmount: 'ยอดเกินกำหนด' },
-            'สถานะเจ้าหนี้การค้า',
-            'AP Outstanding'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: apOutstanding,
+            headers: { supplierCode: 'รหัสซัพพลายเออร์', supplierName: 'ชื่อซัพพลายเออร์', docCount: 'จำนวนเอกสาร', totalOutstanding: 'ยอดค้างชำระ', overdueAmount: 'ยอดเกินกำหนด' },
+            filename: 'สถานะเจ้าหนี้การค้า',
+            sheetName: 'AP Outstanding',
+            title: 'รายงานสถานะเจ้าหนี้การค้า',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+            currencyColumns: ['totalOutstanding', 'overdueAmount'],
+            numberColumns: ['docCount'],
+            summaryConfig: {
+              columns: {
+                docCount: 'sum',
+                totalOutstanding: 'sum',
+                overdueAmount: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={10} />
@@ -540,6 +654,24 @@ export default function PurchaseReportPage() {
               defaultSortKey="totalOutstanding"
               defaultSortOrder="desc"
               keyExtractor={(item: APOutstanding) => item.supplierCode}
+              showSummary={true}
+              summaryConfig={{
+                labelColSpan: 1,
+                values: {
+                  docCount: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.docCount, 0);
+                    return <span className="font-medium">{formatNumber(total)}</span>;
+                  },
+                  totalOutstanding: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.totalOutstanding, 0);
+                    return <span className="font-medium text-orange-600">฿{formatCurrency(total)}</span>;
+                  },
+                  overdueAmount: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.overdueAmount, 0);
+                    return <span className="font-medium text-red-600">฿{formatCurrency(total)}</span>;
+                  },
+                }
+              }}
             />
           )}
         </DataCard>

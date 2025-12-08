@@ -238,25 +238,26 @@ export default function SalesPage() {
           </ErrorBoundary>
         </PermissionGuard>
 
-        <PermissionGuard componentKey="sales.by_branch">
+        <PermissionGuard componentKey="sales.top_customers">
           <ErrorBoundary>
             <DataCard
-              title="ยอดขายแยกตามสาขา"
-              description="เปรียบเทียบยอดขายของแต่ละสาขา"
-              linkTo="/reports/sales#sales-by-branch"
+              title="ลูกค้า VIP Top 20"
+              description="ลูกค้าที่มียอดซื้อสูงสุด"
+              linkTo="/reports/sales#top-customers"
               queryInfo={{
-                query: getSalesByBranchQuery(dateRange.start, dateRange.end),
+                query: getTopCustomersQuery(dateRange.start, dateRange.end),
                 format: 'JSONEachRow'
               }}
             >
               {loading ? (
-                <ChartSkeleton />
+                <TableSkeleton rows={10} />
               ) : (
-                <SalesByBranchChart data={salesByBranch} />
+                <TopCustomersTable data={topCustomers} />
               )}
             </DataCard>
           </ErrorBoundary>
         </PermissionGuard>
+
       </div>
 
       {/* Sales by Salesperson */}
@@ -282,21 +283,21 @@ export default function SalesPage() {
 
       {/* Top Customers & AR Status */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        <PermissionGuard componentKey="sales.top_customers">
+        <PermissionGuard componentKey="sales.by_branch">
           <ErrorBoundary>
             <DataCard
-              title="ลูกค้า VIP Top 20"
-              description="ลูกค้าที่มียอดซื้อสูงสุด"
-              linkTo="/reports/sales#top-customers"
+              title="ยอดขายแยกตามสาขา"
+              description="เปรียบเทียบยอดขายของแต่ละสาขา"
+              linkTo="/reports/sales#sales-by-branch"
               queryInfo={{
-                query: getTopCustomersQuery(dateRange.start, dateRange.end),
+                query: getSalesByBranchQuery(dateRange.start, dateRange.end),
                 format: 'JSONEachRow'
               }}
             >
               {loading ? (
-                <TableSkeleton rows={10} />
+                <ChartSkeleton />
               ) : (
-                <TopCustomersTable data={topCustomers} />
+                <SalesByBranchChart data={salesByBranch} />
               )}
             </DataCard>
           </ErrorBoundary>

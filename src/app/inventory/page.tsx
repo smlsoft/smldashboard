@@ -243,7 +243,7 @@ export default function InventoryPage() {
             {loading ? (
               <TableSkeleton rows={10} />
             ) : (
-              <LowStockTable data={lowStockItems} height="680px" />
+              <LowStockTable data={lowStockItems} height="500px" />
             )}
           </DataCard>
         </ErrorBoundary>
@@ -259,7 +259,7 @@ export default function InventoryPage() {
           }}
           >
             {loading ? (
-              <TableSkeleton rows={10} />
+              <TableSkeleton rows={5} />
             ) : (
               <OverstockTable data={overstockItems} height="400px"/>
             )}
@@ -281,7 +281,7 @@ export default function InventoryPage() {
           {loading ? (
             <TableSkeleton rows={10} />
           ) : (
-            <SlowMovingTable data={slowMovingItems}height="680px" />
+            <SlowMovingTable data={slowMovingItems} height="710px" />
           )}
         </DataCard>
       </ErrorBoundary>

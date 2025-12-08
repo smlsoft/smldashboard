@@ -3,6 +3,25 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
+
+/**
+ * Summary calculation types
+ */
+export type SummaryType = 'sum' | 'avg' | 'count' | 'min' | 'max';
+/**
+ * Summary configuration for columns
+ */
+export interface SummaryColumnConfig {
+  [columnKey: string]: SummaryType;
+}
+/**
+ * Summary configuration
+ */
+export interface ExcelSummaryConfig {
+  label?: string;           // Label for summary row (e.g., "รวมทั้งหมด")
+  columns: SummaryColumnConfig;  // Which columns to summarize and how
+}
+
 /**
  * Export data to Excel file with styling using ExcelJS
  * @param data - Array of objects to export
@@ -219,6 +238,59 @@ export async function exportMultipleSheetsToExcel(
 }
 
 /**
+ * Calculate summary value based on type
+ */
+function calculateSummary<T extends Record<string, any>>(
+  data: T[],
+  key: string,
+  type: SummaryType
+): number {
+  const values = data
+    .map((row) => {
+      const val = row[key];
+      return typeof val === 'number' ? val : parseFloat(val) || 0;
+    })
+    .filter((v) => !isNaN(v));
+
+  if (values.length === 0) return 0;
+
+  switch (type) {
+    case 'sum':
+      return values.reduce((acc, val) => acc + val, 0);
+    case 'avg':
+      return values.reduce((acc, val) => acc + val, 0) / values.length;
+    case 'count':
+      return values.length;
+    case 'min':
+      return Math.min(...values);
+    case 'max':
+      return Math.max(...values);
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Get summary type label in Thai
+ */
+function getSummaryTypeLabel(type: SummaryType): string {
+  switch (type) {
+    case 'sum':
+      return 'รวม';
+    case 'avg':
+      return 'เฉลี่ย';
+    case 'count':
+      return 'จำนวน';
+    case 'min':
+      return 'ต่ำสุด';
+    case 'max':
+      return 'สูงสุด';
+    default:
+      return '';
+  }
+}
+
+/**
  * Export styled report with title, date, and summary
  * @param options - Report options
  */
@@ -232,7 +304,9 @@ export async function exportStyledReport<T extends Record<string, any>>(
     subtitle?: string;
     numberColumns?: string[]; // Column keys that should be formatted as numbers
     currencyColumns?: string[]; // Column keys that should be formatted as currency
-    percentColumns?: string[]; // Column keys that should be formatted as percentage
+    percentColumns?: string[]; // Column keys that should be formatted as perce
+    summaryConfig?: ExcelSummaryConfig;  // Summary row configuration
+
   }
 ): Promise<void> {
   const {
@@ -245,6 +319,7 @@ export async function exportStyledReport<T extends Record<string, any>>(
     numberColumns = [],
     currencyColumns = [],
     percentColumns = [],
+    summaryConfig
   } = options;
 
   if (!data || data.length === 0) {
@@ -356,7 +431,64 @@ export async function exportStyledReport<T extends Record<string, any>>(
     });
     currentRow++;
   });
+  // Add summary row if configured
+  if (summaryConfig && summaryConfig.columns) {
+    const summaryRowNum = currentRow;
+    const summaryLabel = summaryConfig.label || 'รวมทั้งหมด';
 
+    headerKeys.forEach((key, colIndex) => {
+      const cell = worksheet.getCell(summaryRowNum, colIndex + 1);
+      
+      // First column gets the label
+      if (colIndex === 0) {
+        cell.value = summaryLabel;
+        cell.font = { bold: true, color: { argb: 'FF1F4E79' } };
+      } 
+      // Columns with summary config
+      else if (summaryConfig.columns[key]) {
+        const summaryType = summaryConfig.columns[key];
+        const summaryValue = calculateSummary(data, key, summaryType);
+        
+        cell.value = summaryValue;
+        cell.font = { bold: true, color: { argb: 'FF1F4E79' } };
+
+        // Apply number formatting based on column type
+        if (currencyColumns.includes(key)) {
+          cell.numFmt = '#,##0.00';
+        } else if (percentColumns.includes(key)) {
+          cell.value = summaryValue / 100;
+          cell.numFmt = '0.00%';
+        } else if (numberColumns.includes(key)) {
+          cell.numFmt = '#,##0';
+        } else {
+          cell.numFmt = '#,##0.00';
+        }
+      }
+
+      // Summary row styling - golden yellow background
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFF2CC' }, // Light golden yellow
+      };
+
+      cell.alignment = { 
+        vertical: 'middle',
+        horizontal: colIndex === 0 ? 'left' : 'right'
+      };
+
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FFD4A84B' } },
+        left: { style: 'thin', color: { argb: 'FFD4A84B' } },
+        bottom: { style: 'medium', color: { argb: 'FFD4A84B' } },
+        right: { style: 'thin', color: { argb: 'FFD4A84B' } },
+      };
+    });
+
+    worksheet.getRow(summaryRowNum).height = 28;
+    currentRow++;
+  }
+  
   // Auto-fit columns
   worksheet.columns.forEach((column, index) => {
     const header = headerValues[index] || '';

@@ -8,7 +8,7 @@ import { TableSkeleton } from '@/components/LoadingSkeleton';
 import { PaginatedTable, type ColumnDef } from '@/components/PaginatedTable';
 import { AlertCircle, AlertTriangle, TrendingDown, Package } from 'lucide-react';
 import { getDateRange } from '@/lib/dateRanges';
-import { exportToExcelWithHeaders } from '@/lib/exportExcel';
+import { exportStyledReport } from '@/lib/exportExcel';
 import type { 
   DateRange, 
   StockMovement,
@@ -26,6 +26,7 @@ import {
   getInventoryTurnoverQuery,
   getStockByBranchQuery,
 } from '@/lib/data/inventory';
+import { reverse } from 'dns';
 
 export default function InventoryReportPage() {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRange('THIS_MONTH'));
@@ -506,19 +507,29 @@ export default function InventoryReportPage() {
       {/* Stock Movement Table */}
       <ErrorBoundary>
         <DataCard
-          id="stock-movement"
           title="การเคลื่อนไหวสต็อก"
           description="รายการรับเข้าและจ่ายออกสินค้ารายวัน"
           queryInfo={{
             query: getStockMovementQuery(dateRange.start, dateRange.end),
             format: 'JSONEachRow'
           }}
-          onExportExcel={() => exportToExcelWithHeaders(
-            stockMovement,
-            { date: 'วันที่', qtyIn: 'รับเข้า', qtyOut: 'จ่ายออก', netMovement: 'สุทธิ' },
-            'การเคลื่อนไหวสต็อก',
-            'Stock Movement'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: stockMovement,
+            headers: { date: 'วันที่', qtyIn: 'รับเข้า', qtyOut: 'จ่ายออก' },
+            filename: 'การเคลื่อนไหวสต็อก',
+            sheetName: 'Stock Movement',
+            title: 'รายงานการเคลื่อนไหวสต็อก',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+           // numberColumns: ['qtyIn', 'qtyOut'],
+            currencyColumns: ['qtyIn', 'qtyOut','net'],
+            summaryConfig: {
+              columns: {
+                qtyIn: 'sum',
+                qtyOut: 'sum',
+                net: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={10} />
@@ -531,6 +542,28 @@ export default function InventoryReportPage() {
               defaultSortKey="date"
               defaultSortOrder="desc"
               keyExtractor={(item: StockMovement) => item.date}
+              showSummary = {true}
+              summaryConfig={{
+                labelColSpan : 1,
+                values: {
+                  qtyIn: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.qtyIn, 0);
+                    return <span className="text-green-600 font-bold-medium"> {formatNumber(total)} </span>;
+                  },
+                  qtyOut: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.qtyOut, 0);
+                    return <span className="text-red-600 font-bold"> {formatNumber(total)} </span>;
+                  },
+                  net: (data) => {
+                    const total = data.reduce((sum, item) => sum + (item.qtyIn - item.qtyOut), 0);
+ return (
+                      <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        ฿{formatCurrency(total)}
+                      </span>
+                    )                  
+                  },
+                }
+              }}
             />
           )}
         </DataCard>
@@ -547,12 +580,22 @@ export default function InventoryReportPage() {
               query: getLowStockItemsQuery(asOfDate),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              lowStockItems,
-              { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', qtyOnHand: 'คงเหลือ', reorderPoint: 'จุดสั่งซื้อ', shortfall: 'ขาด', stockValue: 'มูลค่า' },
-              'สินค้าใกล้หมด',
-              'Low Stock'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: lowStockItems,
+              headers: { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', brandName: 'แบรนด์', branchName: 'สาขา', qtyOnHand: 'คงเหลือ', reorderPoint: 'จุดสั่งซื้อ', stockValue: 'มูลค่า' },
+              filename: 'สินค้าใกล้หมด',
+              sheetName: 'Low Stock',
+              title: 'รายงานสินค้าใกล้หมด',
+              subtitle: `ณ วันที่ ${asOfDate}`,
+              numberColumns: ['qtyOnHand', 'reorderPoint'],
+              currencyColumns: ['stockValue'],
+              summaryConfig: {
+                columns: {
+                  qtyOnHand: 'sum',
+                  stockValue: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -565,6 +608,17 @@ export default function InventoryReportPage() {
                 defaultSortKey="qtyOnHand"
                 defaultSortOrder="asc"
                 keyExtractor={(item: LowStockItem) => item.itemCode}
+                showSummary = {true}
+                summaryConfig={{
+                  label: '',
+                  labelColSpan:1,
+                  values:{
+                    stockValue: (data) => {
+                      const total = data.reduce((sum, item) => sum + item.stockValue, 0);
+                      return <span className="font-bold text-blue-600">฿{formatCurrency(total)}</span>;
+                    }
+                  }
+                }}
               />
             )}
           </DataCard>
@@ -579,12 +633,22 @@ export default function InventoryReportPage() {
               query: getOverstockItemsQuery(asOfDate),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              overstockItems,
-              { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', qtyOnHand: 'คงเหลือ', maxStock: 'ระดับสูงสุด', excess: 'เกิน', valueExcess: 'มูลค่าส่วนเกิน' },
-              'สินค้าเกินคลัง',
-              'Overstock'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: overstockItems,
+              headers: { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', brandName: 'แบรนด์', qtyOnHand: 'คงเหลือ', maxStockLevel: 'ระดับสูงสุด', valueExcess: 'มูลค่าส่วนเกิน' },
+              filename: 'สินค้าเกินคลัง',
+              sheetName: 'Overstock',
+              title: 'รายงานสินค้าเกินคลัง',
+              subtitle: `ณ วันที่ ${asOfDate}`,
+              numberColumns: ['qtyOnHand', 'maxStockLevel'],
+              currencyColumns: ['valueExcess'],
+              summaryConfig: {
+                columns: {
+                  qtyOnHand: 'sum',
+                  valueExcess: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -597,6 +661,18 @@ export default function InventoryReportPage() {
                 defaultSortKey="valueExcess"
                 defaultSortOrder="desc"
                 keyExtractor={(item: OverstockItem) => item.itemCode}
+                showSummary = {true}
+                summaryConfig={{
+                  label: '',
+                  labelColSpan:1,
+                  values:{
+                    valueExcess: (data) => {
+                      const total = data.reduce((sum, item) => sum + item.valueExcess, 0);
+                      return <span className="font-bold text-red-600">฿{formatCurrency(total)}</span>;
+                    },
+                 
+                  },
+                }}
               />
             )}
           </DataCard>
@@ -613,12 +689,23 @@ export default function InventoryReportPage() {
             query: getSlowMovingItemsQuery(dateRange.start, dateRange.end, asOfDate),
             format: 'JSONEachRow'
           }}
-          onExportExcel={() => exportToExcelWithHeaders(
-            slowMovingItems,
-            { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', qtyOnHand: 'คงเหลือ', qtySold: 'ขายได้', daysOfStock: 'วันสต็อก', stockValue: 'มูลค่า' },
-            'สินค้าขายช้า',
-            'Slow Moving'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: slowMovingItems,
+            headers: { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', categoryName: 'หมวดหมู่', qtyOnHand: 'คงเหลือ', qtySold: 'ขายได้', daysOfStock: 'วันสต็อก', stockValue: 'มูลค่า' },
+            filename: 'สินค้าขายช้า',
+            sheetName: 'Slow Moving',
+            title: 'รายงานสินค้าขายช้า',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+            numberColumns: ['qtyOnHand', 'qtySold', 'daysOfStock'],
+            currencyColumns: ['stockValue'],
+            summaryConfig: {
+              columns: {
+                qtyOnHand: 'sum',
+                qtySold: 'sum',
+                stockValue: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={10} />
@@ -631,6 +718,16 @@ export default function InventoryReportPage() {
               defaultSortKey="stockValue"
               defaultSortOrder="desc"
               keyExtractor={(item: SlowMovingItem) => item.itemCode}
+              showSummary = {true}
+              summaryConfig={{
+                labelColSpan : 1,
+                values: {
+                  stockValue: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.stockValue, 0);
+                    return <span className="font-bold text-blue-600">฿{formatCurrency(total)}</span>;
+                }
+              }
+              }}
             />
           )}
         </DataCard>
@@ -647,12 +744,25 @@ export default function InventoryReportPage() {
               query: getInventoryTurnoverQuery(dateRange.start, dateRange.end, asOfDate),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              inventoryTurnover,
-              { itemName: 'หมวดหมู่', avgInventoryValue: 'มูลค่าสต็อกเฉลี่ย', totalCOGS: 'ต้นทุนขาย', turnoverRatio: 'อัตราหมุนเวียน', daysToSell: 'วันขายหมด' },
-              'อัตราหมุนเวียนสินค้า',
-              'Inventory Turnover'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: inventoryTurnover,
+              headers: { itemName: 'หมวดหมู่', avgInventoryValue: 'มูลค่าสต็อกเฉลี่ย', totalCOGS: 'ต้นทุนขาย', turnoverRatio: 'อัตราหมุนเวียน', daysToSell: 'วันขายหมด' },
+              filename: 'อัตราหมุนเวียนสินค้า',
+              sheetName: 'Inventory Turnover',
+              title: 'รายงานอัตราหมุนเวียนสินค้า',
+              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+              currencyColumns: ['avgInventoryValue', 'totalCOGS'],
+              numberColumns: ['turnoverRatio', 'daysToSell'],
+              summaryConfig: {
+                label: 'รวม/เฉลี่ย',
+                columns: {
+                  avgInventoryValue: 'sum',
+                  totalCOGS: 'sum',
+                  turnoverRatio: 'avg',
+                  daysToSell: 'avg',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -679,12 +789,23 @@ export default function InventoryReportPage() {
               query: getStockByBranchQuery(asOfDate),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              stockByBranch,
-              { branchCode: 'รหัสสาขา', branchName: 'ชื่อสาขา', itemCount: 'จำนวนรายการ', qtyOnHand: 'จำนวนสินค้า', inventoryValue: 'มูลค่าสินค้า' },
-              'สต็อกตามสาขา',
-              'Stock by Branch'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: stockByBranch,
+              headers: { branchCode: 'รหัสสาขา', branchName: 'ชื่อสาขา', itemCount: 'จำนวนรายการ', qtyOnHand: 'จำนวนสินค้า', inventoryValue: 'มูลค่าสินค้า' },
+              filename: 'สต็อกตามสาขา',
+              sheetName: 'Stock by Branch',
+              title: 'รายงานสต็อกตามสาขา',
+              subtitle: `ณ วันที่ ${asOfDate}`,
+              numberColumns: ['itemCount', 'qtyOnHand'],
+              currencyColumns: ['inventoryValue'],
+              summaryConfig: {
+                columns: {
+                  itemCount: 'sum',
+                  qtyOnHand: 'sum',
+                  inventoryValue: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />

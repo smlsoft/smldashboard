@@ -8,7 +8,7 @@ import { ErrorBoundary, ErrorDisplay } from '@/components/ErrorBoundary';
 import { TableSkeleton } from '@/components/LoadingSkeleton';
 import { PaginatedTable, type ColumnDef } from '@/components/PaginatedTable';
 import { getDateRange } from '@/lib/dateRanges';
-import { exportToExcelWithHeaders } from '@/lib/exportExcel';
+import { exportStyledReport } from '@/lib/exportExcel';
 import type { 
   DateRange, 
   ProfitLossData, 
@@ -26,6 +26,7 @@ import {
   getRevenueBreakdownQuery,
   getExpenseBreakdownQuery,
 } from '@/lib/data/accounting';
+import { reverse } from 'dns';
 
 export default function AccountingReportPage() {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRange('THIS_MONTH'));
@@ -120,7 +121,7 @@ export default function AccountingReportPage() {
     }
   };
 
-  // Format helpers
+  // Helper function สำหรับ format ค่า
   const formatCurrency = (value: number): string => {
     return value.toLocaleString('th-TH', {
       minimumFractionDigits: 2,
@@ -156,7 +157,7 @@ export default function AccountingReportPage() {
       case '61-90 วัน':
         return 'text-blue-600';
       default:
-        return 'text-blue-700 font-semibold';
+        return 'text-red-600 font-semibold';
     }
   };
 
@@ -496,18 +497,28 @@ export default function AccountingReportPage() {
       <ErrorBoundary>
         <DataCard
           id="profit-loss"
-          title="งบกำไรขาดทุน"
+          title="กำไร(ขาดทุน) สุทธิ"
           description="รายได้ ค่าใช้จ่าย และกำไรสุทธิรายเดือน"
           queryInfo={{
             query: getProfitLossQuery(dateRange),
             format: 'JSONEachRow'
           }}
-          onExportExcel={() => exportToExcelWithHeaders(
-            profitLossData,
-            { month: 'เดือน', revenue: 'รายได้', expenses: 'ค่าใช้จ่าย', netProfit: 'กำไรสุทธิ' },
-            'งบกำไรขาดทุน',
-            'Profit & Loss'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: profitLossData,
+            headers: { month: 'เดือน', revenue: 'รายได้', expenses: 'ค่าใช้จ่าย', netProfit: 'กำไรสุทธิ' },
+            filename: 'รายงานงบกำไรขาดทุน',
+            sheetName: 'Profit & Loss',
+            title: 'รายงานงบกำไรขาดทุน',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+            currencyColumns: ['revenue', 'expenses', 'netProfit'],
+            summaryConfig: {
+              columns: {
+                revenue: 'sum',
+                expenses: 'sum',
+                netProfit: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={6} />
@@ -520,6 +531,30 @@ export default function AccountingReportPage() {
               defaultSortKey="month"
               defaultSortOrder="desc"
               keyExtractor={(item: ProfitLossData) => item.month}
+              showSummary={true}
+              summaryConfig={{
+                labelColSpan: 1,
+                values: {
+                  revenue: (data) => (
+                    <span className="text-green-600 font-bold">
+                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
+                    </span>
+                  ),
+                  expenses: (data) => (
+                    <span className="text-red-600 font-bold">
+                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.expenses, 0))}
+                    </span>
+                  ),
+                  netProfit: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.netProfit, 0);
+                    return (
+                      <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        ฿{formatCurrency(total)}
+                      </span>
+                    );
+                  },
+                },
+              }}
             />
           )}
         </DataCard>
@@ -535,14 +570,22 @@ export default function AccountingReportPage() {
             query: getBalanceSheetQuery(dateRange.end),
             format: 'JSONEachRow'
           }} 
-          onExportExcel={() => exportToExcelWithHeaders(
-            balanceSheetTypeFilter === 'all' 
+          onExportExcel={() => exportStyledReport({
+            data: balanceSheetTypeFilter === 'all' 
               ? balanceSheetData 
               : balanceSheetData.filter(item => item.typeName === balanceSheetTypeFilter),
-            { accountCode: 'รหัสบัญชี', accountName: 'ชื่อบัญชี', typeName: 'ประเภท', balance: 'ยอดคงเหลือ' },
-            'งบดุล',
-            'Balance Sheet'
-          )}
+            headers: { accountCode: 'รหัสบัญชี', accountName: 'ชื่อบัญชี', typeName: 'ประเภท', balance: 'ยอดคงเหลือ' },
+            filename: 'รายงานงบดุล',
+            sheetName: 'Balance Sheet',
+            title: 'รายงานงบดุล',
+            subtitle: `ณ วันที่ ${dateRange.end}`,
+            currencyColumns: ['balance'],
+            summaryConfig: {
+              columns: {
+                balance: 'sum',
+              }
+            }
+          })}
           headerExtra={
             <div className="flex items-center gap-2 -mb-5">
               <label className="text-sm text-muted-foreground">ประเภท:</label>
@@ -573,6 +616,21 @@ export default function AccountingReportPage() {
               defaultSortKey="accountCode"
               defaultSortOrder="asc"
               keyExtractor={(item: BalanceSheetItem) => item.accountCode}
+              showSummary={true}
+              summaryConfig={{
+                
+                labelColSpan: 2,
+                values: {
+                  balance: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.balance, 0);
+                    return (
+                      <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        ฿{formatCurrency(total)}
+                      </span>
+                    );
+                  }
+                }
+              }}
             />
           )}
         </DataCard>
@@ -588,12 +646,22 @@ export default function AccountingReportPage() {
             query: getCashFlowQuery(dateRange),
             format: 'JSONEachRow'
           }}
-          onExportExcel={() => exportToExcelWithHeaders(
-            cashFlowData,
-            { activityType: 'ประเภทกิจกรรม', revenue: 'เงินสดรับ', expenses: 'เงินสดจ่าย', netCashFlow: 'กระแสเงินสดสุทธิ' },
-            'งบกระแสเงินสด',
-            'Cash Flow'
-          )}
+          onExportExcel={() => exportStyledReport({
+            data: cashFlowData,
+            headers: { activityType: 'ประเภทกิจกรรม', revenue: 'เงินสดรับ', expenses: 'เงินสดจ่าย', netCashFlow: 'กระแสเงินสดสุทธิ' },
+            filename: 'รายงานงบกระแสเงินสด',
+            sheetName: 'Cash Flow',
+            title: 'รายงานงบกระแสเงินสด',
+            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+            currencyColumns: ['revenue', 'expenses', 'netCashFlow'],
+            summaryConfig: {
+              columns: {
+                revenue: 'sum',
+                expenses: 'sum',
+                netCashFlow: 'sum',
+              }
+            }
+          })}
         >
           {loading ? (
             <TableSkeleton rows={3} />
@@ -604,6 +672,30 @@ export default function AccountingReportPage() {
               itemsPerPage={10}
               emptyMessage="ไม่มีข้อมูลกระแสเงินสด"
               keyExtractor={(item: CashFlowData) => item.activityType}
+              showSummary={true}
+              summaryConfig={{
+                labelColSpan: 1,
+                values:{
+                  reverse:(data) => (
+                    <span className="text-green-600 font-bold">
+                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
+                    </span>
+                  ),                 
+                  expenses: (data) => (
+                    <span className="text-red-600 font-bold">
+                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.expenses, 0))}   
+                    </span>
+                  ),
+                  netCashFlow: (data) => {
+                    const total = data.reduce((sum, item) => sum + item.netCashFlow, 0);
+                    return (
+                      <span className={`font-bold ${total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ฿{formatCurrency(total)}
+                      </span>
+                    );
+                  },
+                }
+              }}
             />
           )}
         </DataCard>
@@ -620,12 +712,20 @@ export default function AccountingReportPage() {
               query: getARAgingQuery(),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              arAgingData,
-              { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ลูกค้า', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
-              'อายุลูกหนี้',
-              'AR Aging'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: arAgingData,
+              headers: { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ลูกค้า', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
+              filename: 'รายงานอายุลูกหนี้',
+              sheetName: 'AR Aging',
+              title: 'รายงานอายุลูกหนี้ (AR Aging)',
+              subtitle: `ณ วันที่ ${new Date().toLocaleDateString('th-TH')}`,
+              currencyColumns: ['outstanding'],
+              summaryConfig: {
+                columns: {
+                  outstanding: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -652,12 +752,20 @@ export default function AccountingReportPage() {
               query: getAPAgingQuery(),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              apAgingData,
-              { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ซัพพลายเออร์', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
-              'อายุเจ้าหนี้',
-              'AP Aging'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: apAgingData,
+              headers: { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ซัพพลายเออร์', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
+              filename: 'รายงานอายุเจ้าหนี้',
+              sheetName: 'AP Aging',
+              title: 'รายงานอายุเจ้าหนี้ (AP Aging)',
+              subtitle: `ณ วันที่ ${new Date().toLocaleDateString('th-TH')}`,
+              currencyColumns: ['outstanding'],
+              summaryConfig: {
+                columns: {
+                  outstanding: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={8} />
@@ -686,12 +794,21 @@ export default function AccountingReportPage() {
               query: getRevenueBreakdownQuery(dateRange),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              revenueBreakdown,
-              { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
-              'รายได้ตามหมวด',
-              'Revenue Breakdown'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: revenueBreakdown,
+              headers: { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
+              filename: 'รายงานรายได้ตามหมวด',
+              sheetName: 'Revenue Breakdown',
+              title: 'รายงานรายได้ตามหมวด',
+              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+              currencyColumns: ['amount'],
+              percentColumns: ['percentage'],
+              summaryConfig: {
+                columns: {
+                  amount: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={5} />
@@ -704,6 +821,17 @@ export default function AccountingReportPage() {
                 defaultSortKey="amount"
                 defaultSortOrder="desc"
                 keyExtractor={(item: CategoryBreakdown) => item.accountGroup}
+                showSummary={true}
+                summaryConfig={{
+                  labelColSpan: 2,
+                  values: {
+                    amount: (data) => (
+                      <span className="text-green-600 font-bold">
+                        ฿{formatCurrency(data.reduce((sum, item) => sum + item.amount, 0))}
+                      </span>
+                    ),
+                  },
+                }}
               />
             )}
           </DataCard>
@@ -717,12 +845,21 @@ export default function AccountingReportPage() {
               query: getExpenseBreakdownQuery(dateRange),
               format: 'JSONEachRow'
             }}
-            onExportExcel={() => exportToExcelWithHeaders(
-              expenseBreakdown,
-              { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
-              'ค่าใช้จ่ายตามหมวด',
-              'Expense Breakdown'
-            )}
+            onExportExcel={() => exportStyledReport({
+              data: expenseBreakdown,
+              headers: { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
+              filename: 'รายงานค่าใช้จ่ายตามหมวด',
+              sheetName: 'Expense Breakdown',
+              title: 'รายงานค่าใช้จ่ายตามหมวด',
+              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+              currencyColumns: ['amount'],
+              percentColumns: ['percentage'],
+              summaryConfig: {
+                columns: {
+                  amount: 'sum',
+                }
+              }
+            })}
           >
             {loading ? (
               <TableSkeleton rows={5} />
@@ -735,6 +872,17 @@ export default function AccountingReportPage() {
                 defaultSortKey="amount"
                 defaultSortOrder="desc"
                 keyExtractor={(item: CategoryBreakdown) => item.accountGroup}
+                showSummary={true}
+                summaryConfig={{
+                  labelColSpan: 2,
+                  values: {
+                    amount: (data) => (
+                      <span className="text-red-600 font-bold">
+                        ฿{formatCurrency(data.reduce((sum, item) => sum + item.amount, 0))}
+                      </span>
+                    ),
+                  },
+                }}
               />
             )}
           </DataCard>

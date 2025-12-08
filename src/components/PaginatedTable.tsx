@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, ReactNode } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Database } from 'lucide-react';
 
 export interface ColumnDef<T> {
   key: string;
@@ -10,6 +10,17 @@ export interface ColumnDef<T> {
   align?: 'left' | 'center' | 'right';
   render?: (item: T, index: number) => ReactNode;
   className?: string;
+  // เพิ่ม summary render function
+  summaryRender?: (data: T[]) => ReactNode;
+}
+
+// เพิ่ม SummaryConfig type
+export interface SummaryConfig<T> {
+  label?: string;
+  labelColSpan?: number;
+  values: {
+    [key: string]: (data: T[]) => ReactNode;
+  };
 }
 
 interface PaginatedTableProps<T> {
@@ -21,6 +32,9 @@ interface PaginatedTableProps<T> {
   rowClassName?: (item: T, index: number) => string;
   defaultSortKey?: string;
   defaultSortOrder?: 'asc' | 'desc';
+  // เพิ่ม summary props
+  showSummary?: boolean;
+  summaryConfig?: SummaryConfig<T>;
 }
 
 export function PaginatedTable<T = any>({
@@ -32,6 +46,8 @@ export function PaginatedTable<T = any>({
   rowClassName,
   defaultSortKey,
   defaultSortOrder = 'desc',
+  showSummary = false,
+  summaryConfig,
 }: PaginatedTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey || null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(defaultSortOrder);
@@ -45,7 +61,7 @@ export function PaginatedTable<T = any>({
       setSortKey(key);
       setSortOrder('desc');
     }
-    setCurrentPage(1); // Reset to first page when sorting
+    setCurrentPage(1);
   };
 
   // Sort data
@@ -67,14 +83,12 @@ export function PaginatedTable<T = any>({
           return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
         }
 
-        // Date comparison
         if (aVal instanceof Date && bVal instanceof Date) {
           return sortOrder === 'asc' 
             ? aVal.getTime() - bVal.getTime()
             : bVal.getTime() - aVal.getTime();
         }
 
-        // String comparison for other types
         return sortOrder === 'asc'
           ? String(aVal).localeCompare(String(bVal), 'th-TH')
           : String(bVal).localeCompare(String(aVal), 'th-TH');
@@ -91,7 +105,6 @@ export function PaginatedTable<T = any>({
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
-  // Get page numbers to display (max 5 pages)
   const getPageNumbers = () => {
     const pages: number[] = [];
     const maxPages = 5;
@@ -101,7 +114,6 @@ export function PaginatedTable<T = any>({
         pages.push(i);
       }
     } else {
-      // Show pages around current page
       let start = Math.max(1, currentPage - 2);
       let end = Math.min(totalPages, start + maxPages - 1);
       
@@ -117,7 +129,6 @@ export function PaginatedTable<T = any>({
     return pages;
   };
 
-  // Get text alignment class
   const getAlignClass = (align?: 'left' | 'center' | 'right') => {
     switch (align) {
       case 'center':
@@ -129,7 +140,6 @@ export function PaginatedTable<T = any>({
     }
   };
 
-  // Get sort icon based on current state
   const getSortIcon = (columnKey: string) => {
     if (sortKey !== columnKey) {
       return <ArrowUpDown className="h-3.5 w-3.5 opacity-30 group-hover:opacity-60 transition-opacity" />;
@@ -142,37 +152,27 @@ export function PaginatedTable<T = any>({
   // Empty state
   if (data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <div className="w-14 h-14 mb-3 rounded-full bg-muted/50 flex items-center justify-center">
-          <svg className="w-7 h-7 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-          </svg>
-        </div>
-        <p className="text-sm">{emptyMessage}</p>
+      <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+        <Database className="h-12 w-12 mb-2 opacity-50" />
+        <p>{emptyMessage}</p>
       </div>
     );
   }
 
   return (
     <div className="w-full flex flex-col h-full flex-1 min-h-0">
-      <div className="overflow-auto flex-1 min-h-0 rounded-none border-border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-muted/30">
+      {/* Table */}
+      <div className="overflow-auto flex-1 min-h-0"> 
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
+            <tr className="bg-muted/50 backdrop-blur-sm">
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`py-3 px-3 font-semibold text-muted-foreground ${getAlignClass(column.align)} ${
-                    column.sortable 
-                      ? 'cursor-pointer select-none group hover:text-foreground hover:bg-muted/50 transition-colors' 
-                      : ''
-                  } ${column.className || ''}`}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border ${getAlignClass(column.align)} ${column.className || ''} ${column.sortable ? 'cursor-pointer select-none group hover:bg-muted/80 transition-colors' : ''}`}
                   onClick={() => column.sortable && handleSort(column.key)}
                 >
-                  <div className={`flex items-center gap-1.5 ${
-                    column.align === 'center' ? 'justify-center' : 
-                    column.align === 'right' ? 'justify-end' : 'justify-start'
-                  }`}>
+                  <div className={`flex items-center gap-1.5 ${column.align === 'right' ? 'justify-end' : column.align === 'center' ? 'justify-center' : 'justify-start'}`}>
                     <span>{column.header}</span>
                     {column.sortable && getSortIcon(column.key)}
                   </div>
@@ -180,91 +180,100 @@ export function PaginatedTable<T = any>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/50">
+          <tbody className="divide-y divide-border">
             {paginatedData.map((item, index) => (
               <tr
                 key={keyExtractor(item, startIndex + index)}
-                className={`hover:bg-muted/30 transition-colors ${
-                  rowClassName ? rowClassName(item, startIndex + index) : ''
-                }`}
+                className={`hover:bg-muted/30 transition-colors ${rowClassName ? rowClassName(item, startIndex + index) : ''}`}
               >
                 {columns.map((column) => (
                   <td
                     key={column.key}
-                    className={`py-2.5 px-3 ${getAlignClass(column.align)} ${column.className || ''}`}
+                    className={`px-4 py-3 text-sm ${getAlignClass(column.align)} ${column.className || ''}`}
                   >
                     {column.render
                       ? column.render(item, startIndex + index)
-                      : String((item as any)[column.key] ?? '')}
+                      : (item as any)[column.key]}
                   </td>
                 ))}
               </tr>
             ))}
           </tbody>
+          
+          {/* Summary Row */}
+          {showSummary && summaryConfig && (
+            <tfoot className="bg-muted/70 backdrop-blur-sm   ">
+              <tr className="font-semibold">
+                {columns.map((column, colIndex) => {
+                  // Label column(s)
+                  if (colIndex === 0) {
+                    return (
+                      <td
+                        key={column.key}
+                        colSpan={summaryConfig.labelColSpan || 1}
+                        className={`px-4 py-3 text-sm font-bold ${getAlignClass(column.align)}`}
+                      >
+                        {summaryConfig.label || 'รวมทั้งหมด'}
+                      </td>
+                    );
+                  }
+                  
+                  // Skip columns covered by colspan
+                  if (colIndex < (summaryConfig.labelColSpan || 1)) {
+                    return null;
+                  }
+                  
+                  // Value columns
+                  const summaryValue = summaryConfig.values[column.key];
+                  return (
+                    <td
+                      key={column.key}
+                      className={`px-4 py-3 text-sm ${getAlignClass(column.align)}`}
+                    >
+                      {summaryValue ? summaryValue(data) : ''}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
-      {/* Pagination Controls */}
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 px-1 border-t border-border flex-shrink-0">
-          <p className="text-sm text-muted-foreground">
-            แสดง <span className="font-medium text-foreground">{startIndex + 1}-{Math.min(endIndex, sortedData.length)}</span> จาก <span className="font-medium text-foreground">{sortedData.length}</span> รายการ
-          </p>
+        <div className="flex items-center justify-between px-2 py-3  border-border mt-auto">
+          <div className="text-xs text-muted-foreground">
+            แสดง {startIndex + 1}-{Math.min(endIndex, sortedData.length)} จาก {sortedData.length} รายการ
+          </div>
+          
           <div className="flex items-center gap-1">
             <button
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
-              className="p-1.5 rounded-md hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label="หน้าก่อนหน้า"
+              className="p-2 rounded-md hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-5 w-4" />
             </button>
             
-            <div className="flex items-center">
-              {currentPage > 3 && totalPages > 5 && (
-                <>
-                  <button
-                    onClick={() => goToPage(1)}
-                    className="min-w-[32px] h-8 rounded-md text-sm hover:bg-muted transition-colors"
-                  >
-                    1
-                  </button>
-                  {currentPage > 4 && <span className="px-1 text-muted-foreground text-xs">•••</span>}
-                </>
-              )}
-              
-              {getPageNumbers().map((page) => (
-                <button
-                  key={page}
-                  onClick={() => goToPage(page)}
-                  className={`min-w-[32px] h-8 rounded-md text-sm font-medium transition-colors ${
-                    currentPage === page
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'hover:bg-muted'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-              
-              {currentPage < totalPages - 2 && totalPages > 5 && (
-                <>
-                  {currentPage < totalPages - 3 && <span className="px-1 text-muted-foreground text-xs">•••</span>}
-                  <button
-                    onClick={() => goToPage(totalPages)}
-                    className="min-w-[32px] h-8 rounded-md text-sm hover:bg-muted transition-colors"
-                  >
-                    {totalPages}
-                  </button>
-                </>
-              )}
-            </div>
+            {getPageNumbers().map((page) => (
+              <button
+                key={page}
+                onClick={() => goToPage(page)}
+                className={`min-w-[32px] h-8 px-2 rounded-md text-sm font-medium transition-colors ${
+                  currentPage === page
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
             
             <button
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="p-1.5 rounded-md hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label="หน้าถัดไป"
+              className="p-1.5 rounded-md hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
