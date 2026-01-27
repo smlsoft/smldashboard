@@ -241,6 +241,7 @@ export default function Dashboard() {
                 ดูทั้งหมด
               </button>
             }
+            className="lg:col-span-2"
           >
             <RecentSales sales={data?.recentSales || []} />
           </DataCard>

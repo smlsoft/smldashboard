@@ -15,6 +15,17 @@ import { ShoppingBag, Package, TrendingDown, FileText } from 'lucide-react';
 import { getDateRange } from '@/lib/dateRanges';
 import { formatGrowthPercentage } from '@/lib/comparison';
 import type { DateRange, PurchaseKPIs, PurchaseTrendData, TopSupplier, PurchaseByCategory, PurchaseByBrand, APOutstanding } from '@/lib/data/types';
+import {
+  getTotalPurchasesQuery,
+  getTotalItemsPurchasedQuery,
+  getTotalOrdersQuery,
+  getAvgOrderValueQuery,
+  getPurchaseTrendQuery,
+  getTopSuppliersQuery,
+  getPurchaseByCategoryQuery,
+  getPurchaseByBrandQuery,
+  getAPOutstandingQuery,
+} from '@/lib/data/purchase';
 
 export default function PurchasePage() {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRange('THIS_MONTH'));
@@ -139,6 +150,10 @@ export default function PurchasePage() {
             trend={formatGrowthPercentage(kpis.totalPurchases.growthPercentage || 0)}
             trendUp={kpis.totalPurchases.trend === 'down'} // Down is good for purchases (cost reduction)
             icon={ShoppingBag}
+            queryInfo={{
+              query: getTotalPurchasesQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="จำนวนสินค้าที่ซื้อ"
@@ -146,6 +161,10 @@ export default function PurchasePage() {
             trend={formatGrowthPercentage(kpis.totalItemsPurchased.growthPercentage || 0)}
             trendUp={kpis.totalItemsPurchased.trend === 'up'}
             icon={Package}
+            queryInfo={{
+              query: getTotalItemsPurchasedQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="จำนวนออเดอร์"
@@ -153,6 +172,10 @@ export default function PurchasePage() {
             trend={formatGrowthPercentage(kpis.totalOrders.growthPercentage || 0)}
             trendUp={kpis.totalOrders.trend === 'up'}
             icon={FileText}
+            queryInfo={{
+              query: getTotalOrdersQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
           <KPICard
             title="ค่าเฉลี่ยต่อออเดอร์"
@@ -160,6 +183,10 @@ export default function PurchasePage() {
             trend={formatGrowthPercentage(kpis.avgOrderValue.growthPercentage || 0)}
             trendUp={kpis.avgOrderValue.trend === 'down'} // Down is good for avg order (efficiency)
             icon={TrendingDown}
+            queryInfo={{
+              query: getAvgOrderValueQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           />
         </div>
       ) : null}
@@ -170,8 +197,11 @@ export default function PurchasePage() {
           <DataCard
             title="แนวโน้มการจัดซื้อ"
             description="ยอดซื้อและจำนวนออเดอร์รายวัน"
-          
-        
+            linkTo="/reports/purchase#trend"
+            queryInfo={{
+              query: getPurchaseTrendQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
           >
             {loading ? (
               <ChartSkeleton />
@@ -183,7 +213,15 @@ export default function PurchasePage() {
 
         {/* Top Suppliers */}
         <ErrorBoundary>
-          <DataCard title="ซัพพลายเออร์ยอดนิยม Top 20" description="รายการซัพพลายเออร์ที่มียอดซื้อสูงสุด">
+          <DataCard
+            title="ซัพพลายเออร์ยอดนิยม Top 20"
+            description="รายการซัพพลายเออร์ที่มียอดซื้อสูงสุด"
+            linkTo="/reports/purchase#top-suppliers"
+            queryInfo={{
+              query: getTopSuppliersQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <ChartSkeleton height="600px" />
             ) : (
@@ -226,7 +264,15 @@ export default function PurchasePage() {
       {/* Purchase by Category & Brand */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard title="การซื้อตามหมวดสินค้า" description="สัดส่วนการซื้อแยกตามหมวดหมู่">
+          <DataCard
+            title="การซื้อตามหมวดสินค้า"
+            description="สัดส่วนการซื้อแยกตามหมวดหมู่"
+            linkTo="/reports/purchase#by-category"
+            queryInfo={{
+              query: getPurchaseByCategoryQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <ChartSkeleton />
             ) : (
@@ -236,7 +282,15 @@ export default function PurchasePage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard title="การซื้อตามแบรนด์" description="Top 10 แบรนด์ที่ซื้อมากที่สุด">
+          <DataCard
+            title="การซื้อตามแบรนด์"
+            description="Top 10 แบรนด์ที่ซื้อมากที่สุด"
+            linkTo="/reports/purchase#by-brand"
+            queryInfo={{
+              query: getPurchaseByBrandQuery(dateRange),
+              format: 'JSONEachRow'
+            }}
+          >
             {loading ? (
               <ChartSkeleton />
             ) : (
@@ -248,7 +302,15 @@ export default function PurchasePage() {
 
       {/* AP Outstanding */}
       <ErrorBoundary>
-        <DataCard title="สถานะเจ้าหนี้การค้า (AP)" description="สรุปยอดเจ้าหนี้ตามสถานะการชำระเงิน">
+        <DataCard
+          title="สถานะเจ้าหนี้การค้า (AP)"
+          description="สรุปยอดเจ้าหนี้ตามสถานะการชำระเงิน"
+          linkTo="/reports/purchase#ap-outstanding"
+          queryInfo={{
+            query: getAPOutstandingQuery(dateRange),
+            format: 'JSONEachRow'
+          }}
+        >
           {loading ? (
             <ChartSkeleton height="350px" />
           ) : (

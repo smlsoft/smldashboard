@@ -194,7 +194,7 @@ export async function getRevenueExpenseData(): Promise<RevenueExpenseData[]> {
 
 /**
  * Get Recent Sales (Last 10 transactions)
- * ดึงรายการขายล่าสุด 10 รายการ
+ * ดึงรายการขายล่าสุด 10 รายการ (ภายใน 30 วันล่าสุด)
  */
 export async function getRecentSales(): Promise<RecentSale[]> {
   try {
@@ -207,6 +207,7 @@ export async function getRecentSales(): Promise<RecentSale[]> {
         status_payment as statusPayment
       FROM saleinvoice_transaction
       WHERE status_cancel != 'Cancel'
+        AND doc_datetime >= now() - INTERVAL 30 DAY
       ORDER BY doc_datetime DESC
       LIMIT 10
     `;

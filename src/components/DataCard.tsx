@@ -25,15 +25,15 @@ interface DataCardProps {
 }
 
 // Query Modal component
-function QueryModal({ 
-    isOpen, 
-    onClose, 
-    title, 
-    queryInfo 
-}: { 
-    isOpen: boolean; 
-    onClose: () => void; 
-    title: string; 
+function QueryModal({
+    isOpen,
+    onClose,
+    title,
+    queryInfo
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    title: string;
     queryInfo: QueryInfo;
 }) {
     const [mounted, setMounted] = useState(false);
@@ -70,7 +70,7 @@ function QueryModal({
     return createPortal(
         <div className="fixed inset-0 z-[9999]">
             {/* Backdrop */}
-            <div 
+            <div
                 className="fixed inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={onClose}
             />
@@ -78,17 +78,17 @@ function QueryModal({
             <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-3xl p-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                        <svg 
-                            className="w-5 h-5 text-blue-500 flex-shrink-0" 
-                            fill="none" 
-                            stroke="currentColor" 
+                        <svg
+                            className="w-5 h-5 text-blue-500 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
                             viewBox="0 0 24 24"
                         >
-                            <path 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                strokeWidth={2} 
-                                d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" 
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
                             />
                         </svg>
                         <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
@@ -99,17 +99,17 @@ function QueryModal({
                         className="p-1.5 rounded-md hover:bg-[hsl(var(--muted))] transition-colors"
                         onClick={onClose}
                     >
-                        <svg 
-                            className="w-6 h-6 text-muted-foreground" 
-                            fill="none" 
-                            stroke="currentColor" 
+                        <svg
+                            className="w-6 h-6 text-muted-foreground"
+                            fill="none"
+                            stroke="currentColor"
                             viewBox="0 0 24 24"
                         >
-                            <path 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                strokeWidth={2} 
-                                d="M6 18L18 6M6 6l12 12" 
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M6 18L18 6M6 6l12 12"
                             />
                         </svg>
                     </button>
@@ -122,13 +122,13 @@ function QueryModal({
                         </span>
                     </div>
                 )}
-           
+
                 <div className="relative">
                     <button
                         className={cn(
                             "absolute top-2 right-2 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 z-10",
-                            copied 
-                                 ? "bg-green-500 text-white"
+                            copied
+                                ? "bg-green-500 text-white"
                                 : "hover:bg-gray-300 text-gray-800"
                         )}
                         onClick={copyToClipboard}
@@ -224,7 +224,7 @@ export function DataCard({ title, children, className, action, description, quer
 
     return (
         <>
-            <div 
+            <div
                 id={id}
                 className={cn(
                     "group flex flex-col rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm transition-all duration-200 hover:shadow-md scroll-mt-24",
@@ -233,23 +233,22 @@ export function DataCard({ title, children, className, action, description, quer
             >
                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-6 py-4">
                     <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                            <h3 className="font-semibold text-[hsl(var(--foreground))] tracking-tight">
-                                {title}
-                            </h3>
-                            {headerExtra && (
-                                <div className="ml-4">
-                                    {headerExtra}
-                                </div>
-                            )}
-                        </div>
+                        <h3 className="font-semibold text-[hsl(var(--foreground))] tracking-tight">
+                            {title}
+                        </h3>
                         {description && (
                             <p className="text-sm text-muted-foreground mt-0.5">
                                 {description}
                             </p>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 ml-4">
+                    <div className="flex items-center gap-3 ml-4">
+                        {/* Header Extra (e.g., filters) */}
+                        {headerExtra && (
+                            <div className="flex items-center">
+                                {headerExtra}
+                            </div>
+                        )}
                         {/* Export Excel button */}
                         {onExportExcel && (
                             <button

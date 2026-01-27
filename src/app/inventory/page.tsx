@@ -15,9 +15,9 @@ import { StockByBranchChart } from '@/components/inventory/StockByBranchChart';
 import { Package, AlertTriangle, AlertCircle, TrendingDown } from 'lucide-react';
 import { getDateRange } from '@/lib/dateRanges';
 import type { DateRange, InventoryKPIs, StockMovement, LowStockItem, OverstockItem, SlowMovingItem, InventoryTurnover, StockByBranch } from '@/lib/data/types';
-import { 
-  getInventoryKPIs, 
-  getStockMovement, 
+import {
+  getInventoryKPIs,
+  getStockMovement,
   getLowStockItems,
   getOverstockItems,
   getSlowMovingItems,
@@ -216,8 +216,8 @@ export default function InventoryPage() {
           description="จำนวนสินค้ารับเข้าและจ่ายออกรายวัน"
           linkTo="/reports/inventory#stock-movement"
           queryInfo={{
-             query: getStockMovementQuery(dateRange.start, dateRange.end),
-             format: 'JSONEachRow',
+            query: getStockMovementQuery(dateRange.start, dateRange.end),
+            format: 'JSONEachRow',
           }}
         >
           {loading ? (
@@ -231,14 +231,14 @@ export default function InventoryPage() {
       {/* Low Stock & Overstock */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard 
-              title="สินค้าใกล้หมด"
-              description="รายการสินค้าที่ต่ำกว่าจุด Reorder Point"
-              linkTo="/reports/inventory/#low-stock"
-              queryInfo={{
-                query: getLowStockItemsQuery(asOfDate),
-                format: 'JSONEachRow',
-              }}
+          <DataCard
+            title="สินค้าใกล้หมด"
+            description="รายการสินค้าที่ต่ำกว่าจุด Reorder Point"
+            linkTo="/reports/inventory#low-stock"
+            queryInfo={{
+              query: getLowStockItemsQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
           >
             {loading ? (
               <TableSkeleton rows={10} />
@@ -249,19 +249,19 @@ export default function InventoryPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard 
-          title="สินค้าเกินคลัง" 
-          description="รายการสินค้าที่เกินระดับสูงสุด"
-          linkTo="/reports/inventory/#overstock"
-          queryInfo={{
-            query: getOverstockItemsQuery(asOfDate),
-            format: 'JSONEachRow',
-          }}
+          <DataCard
+            title="สินค้าเกินคลัง"
+            description="รายการสินค้าที่เกินระดับสูงสุด"
+            linkTo="/reports/inventory#overstock"
+            queryInfo={{
+              query: getOverstockItemsQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
           >
             {loading ? (
-              <TableSkeleton rows={5} />
+              <TableSkeleton rows={10} />
             ) : (
-              <OverstockTable data={overstockItems} height="400px"/>
+              <OverstockTable data={overstockItems} height="450px" />
             )}
           </DataCard>
         </ErrorBoundary>
@@ -269,14 +269,14 @@ export default function InventoryPage() {
 
       {/* Slow Moving Items */}
       <ErrorBoundary>
-        <DataCard 
-        title="สินค้าหมุนเวียนช้า" 
-        description="รายการสินค้าที่มีสต็อกคงค้างนานกว่า 90 วัน"
-        linkTo="/reports/inventory/#slow-moving"
-        queryInfo={{
-          query: getSlowMovingItemsQuery(dateRange.start, dateRange.end, asOfDate),
-          format: 'JSONEachRow',
-        }}
+        <DataCard
+          title="สินค้าหมุนเวียนช้า"
+          description="รายการสินค้าที่มีสต็อกคงค้างนานกว่า 90 วัน"
+          linkTo="/reports/inventory#slow-moving"
+          queryInfo={{
+            query: getSlowMovingItemsQuery(dateRange.start, dateRange.end, asOfDate),
+            format: 'JSONEachRow',
+          }}
         >
           {loading ? (
             <TableSkeleton rows={10} />
@@ -289,15 +289,15 @@ export default function InventoryPage() {
       {/* Inventory Turnover & Stock by Branch */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard 
-          title="อัตราหมุนเวียนสินค้า" 
-          description="การหมุนเวียนและวันขายหมดตามหมวดสินค้า"
-          linkTo="/reports/inventory/#inventory-turnover"
-          queryInfo={{
-            query: getInventoryTurnoverQuery(dateRange.start, dateRange.end, asOfDate),
-            format: 'JSONEachRow',
-          }}
-          > 
+          <DataCard
+            title="อัตราหมุนเวียนสินค้า"
+            description="การหมุนเวียนและวันขายหมดตามหมวดสินค้า"
+            linkTo="/reports/inventory#turnover"
+            queryInfo={{
+              query: getInventoryTurnoverQuery(dateRange.start, dateRange.end, asOfDate),
+              format: 'JSONEachRow',
+            }}
+          >
             {loading ? (
               <ChartSkeleton />
             ) : (
@@ -307,15 +307,15 @@ export default function InventoryPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard 
-          title="สต็อกแยกตามสาขา" 
-          description="มูลค่าและจำนวนรายการสินค้าในแต่ละสาขา"
-          linkTo="/reports/inventory/#stock-by-branch"
-          queryInfo={{
-            query: getStockByBranchQuery(asOfDate),
-            format: 'JSONEachRow',
-          }}
-            >
+          <DataCard
+            title="สต็อกแยกตามสาขา"
+            description="มูลค่าและจำนวนรายการสินค้าในแต่ละสาขา"
+            linkTo="/reports/inventory#by-branch"
+            queryInfo={{
+              query: getStockByBranchQuery(asOfDate),
+              format: 'JSONEachRow',
+            }}
+          >
             {loading ? (
               <ChartSkeleton />
             ) : (

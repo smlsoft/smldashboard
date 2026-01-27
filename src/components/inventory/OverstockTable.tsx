@@ -246,11 +246,10 @@ export function OverstockTable({ data, height = '300px' }: OverstockChartProps) 
             <button
               key={status.name}
               onClick={() => setSelectedStatus(prev => prev === status.name ? null : status.name)}
-              className={`px-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
-                isSelected
-                  ? 'ring-2 ring-offset-2 scale-105'
-                  : 'hover:scale-102 opacity-80 hover:opacity-100'
-              }`}
+              className={`px-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1 ${isSelected
+                ? 'ring-2 ring-offset-2 scale-105'
+                : 'hover:scale-102 opacity-80 hover:opacity-100'
+                }`}
               style={{
                 backgroundColor: `${status.color}20`,
                 borderColor: status.color,
@@ -270,11 +269,10 @@ export function OverstockTable({ data, height = '300px' }: OverstockChartProps) 
         {/* Total button */}
         <button
           onClick={() => setSelectedStatus('all')}
-          className={`px-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-            selectedStatus === 'all'
-              ? 'ring-2 ring-offset-2 scale-105'
-              : 'hover:scale-102 opacity-80 hover:opacity-100'
-          }`}
+          className={`px-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${selectedStatus === 'all'
+            ? 'ring-2 ring-offset-2 scale-105'
+            : 'hover:scale-102 opacity-80 hover:opacity-100'
+            }`}
           style={{
             backgroundColor: '#6b728020',
             borderColor: '#6b7280',
@@ -310,25 +308,27 @@ export function OverstockTable({ data, height = '300px' }: OverstockChartProps) 
 
       {/* Detail Table - Show when status is selected */}
       {selectedStatus && filteredData.length > 0 && (
-        <div className="-mt-20 border-t pt-1">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="-mt-28 border-t pt-1">
+          <div className="flex items-center gap-2 mb-0">
             <AlertCircle className={`h-5 w-5 ${selectedStatus === 'all' ? 'text-gray-600' : getSeverityColor(selectedStatus)}`} />
             <h4 className="font-semibold">
-              {selectedStatus === 'all' 
+              {selectedStatus === 'all'
                 ? `รายการสินค้าทั้งหมด (${filteredData.length} รายการ)`
                 : `รายการสินค้าสถานะ "${selectedStatus}" (${filteredData.length} รายการ)`
               }
             </h4>
           </div>
-          <PaginatedTable
-            data={filteredData}
-            columns={columns}
-            itemsPerPage={5}
-            emptyMessage="ไม่มีข้อมูล"
-            defaultSortKey="valueExcess"
-            defaultSortOrder="desc"
-            keyExtractor={(item: ExtendedOverstockItem) => `${item.itemCode}-${item.branchName}`}
-          />
+          <div className="-mt-1">
+            <PaginatedTable
+              data={filteredData}
+              columns={columns}
+              itemsPerPage={5}
+              emptyMessage="ไม่มีข้อมูล"
+              defaultSortKey="valueExcess"
+              defaultSortOrder="desc"
+              keyExtractor={(item: ExtendedOverstockItem) => `${item.itemCode}-${item.branchName}`}
+            />
+          </div>
         </div>
       )}
     </div>

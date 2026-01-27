@@ -370,13 +370,13 @@ export async function getCustomersData(page = 1, limit = 20) {
         const query = await clickhouse.query({
             query: `
         SELECT 
-          cust_code,
-          cust_name,
+          customer_code,
+          customer_name,
           count(doc_no) as total_orders,
           sum(total_amount) as total_spent,
           max(doc_datetime) as last_order_date
         FROM saleinvoice_transaction
-        GROUP BY cust_code, cust_name
+        GROUP BY customer_code, customer_name
         ORDER BY total_spent DESC
         LIMIT {limit:UInt32} OFFSET {offset:UInt32}
       `,
@@ -388,7 +388,7 @@ export async function getCustomersData(page = 1, limit = 20) {
         });
 
         const totalQuery = await clickhouse.query({
-            query: 'SELECT uniq(cust_code) as count FROM saleinvoice_transaction',
+            query: 'SELECT uniq(customer_code) as count FROM saleinvoice_transaction',
             format: 'JSONEachRow',
         });
 

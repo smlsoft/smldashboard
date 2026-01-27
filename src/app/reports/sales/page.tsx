@@ -6,6 +6,7 @@ import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { ErrorBoundary, ErrorDisplay } from '@/components/ErrorBoundary';
 import { TableSkeleton } from '@/components/LoadingSkeleton';
 import { PaginatedTable, type ColumnDef } from '@/components/PaginatedTable';
+import { ReportTypeSelector, type ReportOption } from '@/components/ReportTypeSelector';
 import {
   TrendingUp,
   Users,
@@ -16,6 +17,8 @@ import {
 } from 'lucide-react';
 import { getDateRange } from '@/lib/dateRanges';
 import { exportStyledReport } from '@/lib/exportExcel';
+import { formatCurrency, formatNumber, formatDate, formatPercent } from '@/lib/formatters';
+import { useReportHash } from '@/hooks/useReportHash';
 import type {
   DateRange,
   SalesTrendData,
@@ -26,11 +29,60 @@ import type {
   ARStatus,
 } from '@/lib/data/types';
 
+// Report types
+type ReportType =
+  | 'sales-trend'
+  | 'top-products'
+  | 'by-branch'
+  | 'by-salesperson'
+  | 'top-customers'
+  | 'ar-status';
+
+const reportOptions: ReportOption<ReportType>[] = [
+  {
+    value: 'sales-trend',
+    label: 'แนวโน้มยอดขาย',
+    icon: TrendingUp,
+    description: 'ยอดขายและจำนวนออเดอร์รายวัน',
+  },
+  {
+    value: 'top-products',
+    label: 'สินค้าขายดี',
+    icon: ShoppingBag,
+    description: 'สินค้าที่มียอดขายสูงสุด',
+  },
+  {
+    value: 'by-branch',
+    label: 'ยอดขายตามสาขา',
+    icon: MapPin,
+    description: 'ยอดขายแยกตามสาขา/คลัง',
+  },
+  {
+    value: 'by-salesperson',
+    label: 'ยอดขายตามพนักงาน',
+    icon: UserCheck,
+    description: 'ยอดขายแยกตามพนักงานขาย',
+  },
+  {
+    value: 'top-customers',
+    label: 'ลูกค้ารายสำคัญ',
+    icon: Users,
+    description: 'ลูกค้าที่มียอดซื้อสูงสุด',
+  },
+  {
+    value: 'ar-status',
+    label: 'สถานะลูกหนี้การค้า',
+    icon: CreditCard,
+    description: 'สรุปสถานะการชำระเงินของลูกค้า',
+  },
+];
+
 export default function SalesReportPage() {
   const [dateRange, setDateRange] = useState<DateRange>(
     getDateRange('THIS_MONTH')
   );
-  const [loading, setLoading] = useState(true);
+  const [selectedReport, setSelectedReport] = useState<ReportType>('sales-trend');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Data states
@@ -43,26 +95,14 @@ export default function SalesReportPage() {
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [arStatus, setArStatus] = useState<ARStatus[]>([]);
 
-  // Scroll to hash element after loading
-  useEffect(() => {
-    if (!loading && typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      if (hash) {
-        const element = document.querySelector(hash);
-        if (element) {
-          setTimeout(() => {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 100);
-        }
-      }
-    }
-  }, [loading]);
+  // Handle URL hash for report selection
+  useReportHash(reportOptions, setSelectedReport);
 
   useEffect(() => {
-    fetchAllData();
-  }, [dateRange]);
+    fetchReportData(selectedReport);
+  }, [dateRange, selectedReport]);
 
-  const fetchAllData = async () => {
+  const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
     setError(null);
 
@@ -72,52 +112,53 @@ export default function SalesReportPage() {
         end_date: dateRange.end,
       });
 
-      const [
-        trendRes,
-        productsRes,
-        branchRes,
-        salespersonRes,
-        customersRes,
-        arRes,
-      ] = await Promise.all([
-        fetch(`/api/sales/trend?${params}`),
-        fetch(`/api/sales/top-products?${params}`),
-        fetch(`/api/sales/by-branch?${params}`),
-        fetch(`/api/sales/by-salesperson?${params}`),
-        fetch(`/api/sales/top-customers?${params}`),
-        fetch(`/api/sales/ar-status?${params}`),
-      ]);
+      let endpoint = '';
+      switch (reportType) {
+        case 'sales-trend':
+          endpoint = `/api/sales/trend?${params}`;
+          break;
+        case 'top-products':
+          endpoint = `/api/sales/top-products?${params}`;
+          break;
+        case 'by-branch':
+          endpoint = `/api/sales/by-branch?${params}`;
+          break;
+        case 'by-salesperson':
+          endpoint = `/api/sales/by-salesperson?${params}`;
+          break;
+        case 'top-customers':
+          endpoint = `/api/sales/top-customers?${params}`;
+          break;
+        case 'ar-status':
+          endpoint = `/api/sales/ar-status?${params}`;
+          break;
+      }
 
-      if (!trendRes.ok) throw new Error('Failed to fetch trend data');
-      if (!productsRes.ok) throw new Error('Failed to fetch top products');
-      if (!branchRes.ok) throw new Error('Failed to fetch sales by branch');
-      if (!salespersonRes.ok)
-        throw new Error('Failed to fetch sales by salesperson');
-      if (!customersRes.ok) throw new Error('Failed to fetch top customers');
-      if (!arRes.ok) throw new Error('Failed to fetch AR status');
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error(`Failed to fetch ${reportType} data`);
 
-      const [
-        trendDataRes,
-        productsData,
-        branchData,
-        salespersonData,
-        customersData,
-        arData,
-      ] = await Promise.all([
-        trendRes.json(),
-        productsRes.json(),
-        branchRes.json(),
-        salespersonRes.json(),
-        customersRes.json(),
-        arRes.json(),
-      ]);
+      const result = await response.json();
 
-      setTrendData(trendDataRes.data);
-      setTopProducts(productsData.data);
-      setSalesByBranch(branchData.data);
-      setSalesBySalesperson(salespersonData.data);
-      setTopCustomers(customersData.data);
-      setArStatus(arData.data);
+      switch (reportType) {
+        case 'sales-trend':
+          setTrendData(result.data);
+          break;
+        case 'top-products':
+          setTopProducts(result.data);
+          break;
+        case 'by-branch':
+          setSalesByBranch(result.data);
+          break;
+        case 'by-salesperson':
+          setSalesBySalesperson(result.data);
+          break;
+        case 'top-customers':
+          setTopCustomers(result.data);
+          break;
+        case 'ar-status':
+          setArStatus(result.data);
+          break;
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล'
@@ -126,34 +167,6 @@ export default function SalesReportPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Format helpers
-  const formatCurrency = (value: number): string => {
-    return value.toLocaleString('th-TH', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
-  const formatNumber = (value: number): string => {
-    return value.toLocaleString('th-TH', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
-  };
-
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('th-TH', {
-      day: '2-digit',
-      month: 'short',
-      year: '2-digit',
-    });
-  };
-
-  const formatPercent = (value: number): string => {
-    return value.toFixed(1) + '%';
   };
 
   // Column definitions for Sales Trend
@@ -540,369 +553,351 @@ export default function SalesReportPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            รายงานยอดขายและลูกค้า
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            ข้อมูลรายงานยอดขาย สินค้า และลูกค้าในรูปแบบตาราง
-          </p>
-        </div>
-        <DateRangeFilter value={dateRange} onChange={setDateRange} />
-      </div>
+  // Get current report option
+  const currentReport = reportOptions.find(opt => opt.value === selectedReport);
 
-      {/* Error Display */}
-      {error && <ErrorDisplay error={error} onRetry={fetchAllData} />}
-
-      {/* Sales Trend Table */}
-      <ErrorBoundary>
-        <DataCard
-          id="sales-trend"
-          title="แนวโน้มยอดขาย"
-          description="ยอดขายและจำนวนออเดอร์รายวัน"
-          onExportExcel={() => {
-            // คำนวณ avgOrderValue ก่อนส่งไป Excel
-            const dataWithAvg = trendData.map(item => ({
-              ...item,
-              avgOrderValue: item.orderCount > 0 ? item.sales / item.orderCount : 0
-            }));
-            exportStyledReport({
-              data: dataWithAvg,
-              headers: { date: 'วันที่', sales: 'ยอดขาย', orderCount: 'จำนวนออเดอร์', avgOrderValue: 'ยอดเฉลี่ย/ออเดอร์' },
-              filename: 'แนวโน้มยอดขาย',
-              sheetName: 'Sales Trend',
-              title: 'รายงานแนวโน้มยอดขาย',
-              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-              currencyColumns: ['sales', 'avgOrderValue'],
-              numberColumns: ['orderCount'],
-              summaryConfig: {
-                columns: {
-                  sales: 'sum',
-                  orderCount: 'sum',
-                  avgOrderValue: 'sum'
+  // Render report content based on selected type
+  const renderReportContent = () => {
+    switch (selectedReport) {
+      case 'sales-trend':
+        return (
+          <PaginatedTable
+            data={trendData}
+            columns={salesTrendColumns}
+            itemsPerPage={15}
+            emptyMessage="ไม่มีข้อมูลยอดขาย"
+            defaultSortKey="date"
+            defaultSortOrder="desc"
+            keyExtractor={(item: SalesTrendData) => item.date}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                sales: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.sales, 0);
+                  return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
+                },
+                orderCount: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.orderCount, 0);
+                  return <span className="font-medium text-black">{total}</span>;
+                },
+                avgOrderValue: (data) => {
+                  const totalAvg = data.reduce((sum, item) => {
+                    const avg = item.orderCount > 0 ? item.sales / item.orderCount : 0;
+                    return sum + avg;
+                  }, 0);
+                  return <span className="font-medium">฿{formatCurrency(totalAvg)}</span>;
                 }
               }
-            });
-          }}
-        >
-          {loading ? (
-            <TableSkeleton rows={10} />
-          ) : (
-            <PaginatedTable
-              data={trendData}
-              columns={salesTrendColumns}
-              itemsPerPage={15}
-              emptyMessage="ไม่มีข้อมูลยอดขาย"
-              defaultSortKey="date"
-              defaultSortOrder="desc"
-              keyExtractor={(item: SalesTrendData) => item.date}
-              showSummary={true}
-              summaryConfig={{
-                labelColSpan: 1,
-                values: {
-                  sales: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.sales, 0);
-                    return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
-                  },
-                  orderCount: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.orderCount, 0);
-                    return <span className="font-medium text-black">{total}</span>;
-                  },
-                  avgOrderValue: (data) => {
-                    // รวมค่า ยอดเฉลี่ย/ออเดอร์ ทุกแถว
-                    const totalAvg = data.reduce((sum, item) => {
-                      const avg = item.orderCount > 0 ? item.sales / item.orderCount : 0;
-                      return sum + avg;
-                    }, 0);
-                    return <span className="font-medium">฿{formatCurrency(totalAvg)}</span>;
-                  }
+            }}
+          />
+        );
+
+      case 'top-products':
+        return (
+          <PaginatedTable
+            data={topProducts}
+            columns={topProductsColumns}
+            itemsPerPage={15}
+            emptyMessage="ไม่มีข้อมูลสินค้าขายดี"
+            defaultSortKey="totalSales"
+            defaultSortOrder="desc"
+            keyExtractor={(item: TopProduct) => item.itemCode}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                totalQtySold: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.totalQtySold, 0);
+                  return <span className="font-medium text-black">{formatNumber(total)}</span>;
+                },
+                totalSales: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.totalSales, 0);
+                  return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
+                },
+                totalProfit: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.totalProfit, 0);
+                  return <span className="font-medium text-blue-600">฿{formatCurrency(total)}</span>;
                 }
               }
-            }
-            />
-          )}
-        </DataCard>
-      </ErrorBoundary>
+            }}
+          />
+        );
 
-      {/* Top Products Table */}
-      <ErrorBoundary>
-        <DataCard
-          id="top-products"
-          title="สินค้าขายดี"
-          description="สินค้าที่มียอดขายสูงสุด"
-          onExportExcel={() => exportStyledReport({
-            data: topProducts,
-            headers: { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', brandName: 'แบรนด์', categoryName: 'หมวดหมู่', totalQtySold: 'จำนวนขาย', totalSales: 'ยอดขาย', totalProfit: 'กำไร', profitMarginPct: 'อัตรากำไร (%)' },
-            filename: 'สินค้าขายดี',
-            sheetName: 'Top Products',
-            title: 'รายงานสินค้าขายดี',
+      case 'by-branch':
+        return (
+          <PaginatedTable
+            data={salesByBranch}
+            columns={salesByBranchColumns}
+            itemsPerPage={10}
+            emptyMessage="ไม่มีข้อมูลสาขา"
+            defaultSortKey="totalSales"
+            defaultSortOrder="desc"
+            keyExtractor={(item: SalesByBranch) => item.branchCode}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                orderCount: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.orderCount, 0);
+                  return <span className="font-medium text-black">{formatNumber(total)}</span>;
+                },
+                totalSales: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.totalSales, 0);
+                  return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
+                }
+              }
+            }}
+          />
+        );
+
+      case 'by-salesperson':
+        return (
+          <PaginatedTable
+            data={salesBySalesperson}
+            columns={salesBySalespersonColumns}
+            itemsPerPage={10}
+            emptyMessage="ไม่มีข้อมูลพนักงานขาย"
+            defaultSortKey="totalSales"
+            defaultSortOrder="desc"
+            keyExtractor={(item: SalesBySalesperson) => item.saleCode}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                orderCount: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.orderCount, 0);
+                  return <span className="font-medium text-black">{formatNumber(total)}</span>;
+                },
+                totalSales: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.totalSales, 0);
+                  return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
+                }
+              }
+            }}
+          />
+        );
+
+      case 'top-customers':
+        return (
+          <PaginatedTable
+            data={topCustomers}
+            columns={topCustomersColumns}
+            itemsPerPage={10}
+            emptyMessage="ไม่มีข้อมูลลูกค้า"
+            defaultSortKey="totalSpent"
+            defaultSortOrder="desc"
+            keyExtractor={(item: TopCustomer) => item.customerCode}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                orderCount: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.orderCount, 0);
+                  return <span className="font-medium text-black">{formatNumber(total)}</span>;
+                },
+                totalSpent: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.totalSpent, 0);
+                  return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
+                },
+                avgOrderValue: (data) => {
+                  const totalAvg = data.reduce((sum, item) => {
+                    const avg = item.orderCount > 0 ? item.avgOrderValue : 0;
+                    return sum + avg;
+                  }, 0);
+                  return <span className="font-medium">฿{formatCurrency(totalAvg)}</span>;
+                }
+              }
+            }}
+          />
+        );
+
+      case 'ar-status':
+        return (
+          <PaginatedTable
+            data={arStatus}
+            columns={arStatusColumns}
+            itemsPerPage={10}
+            emptyMessage="ไม่มีข้อมูลลูกหนี้"
+            defaultSortKey="totalOutstanding"
+            defaultSortOrder="desc"
+            keyExtractor={(item: ARStatus) => item.statusPayment}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Get export function based on report type
+  const getExportFunction = () => {
+    switch (selectedReport) {
+      case 'sales-trend':
+        return () => {
+          const dataWithAvg = trendData.map(item => ({
+            ...item,
+            avgOrderValue: item.orderCount > 0 ? item.sales / item.orderCount : 0
+          }));
+          exportStyledReport({
+            data: dataWithAvg,
+            headers: { date: 'วันที่', sales: 'ยอดขาย', orderCount: 'จำนวนออเดอร์', avgOrderValue: 'ยอดเฉลี่ย/ออเดอร์' },
+            filename: 'แนวโน้มยอดขาย',
+            sheetName: 'Sales Trend',
+            title: 'รายงานแนวโน้มยอดขาย',
             subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-            numberColumns: ['totalQtySold'],
-            currencyColumns: ['totalSales', 'totalProfit'],
-            percentColumns: ['profitMarginPct'],
+            currencyColumns: ['sales', 'avgOrderValue'],
+            numberColumns: ['orderCount'],
             summaryConfig: {
               columns: {
-                totalQtySold: 'sum',
-                totalSales: 'sum',
-                totalProfit: 'sum',
-              }
-            }
-          })}
-        >
-          {loading ? (
-            <TableSkeleton rows={10} />
-          ) : (
-            <PaginatedTable
-              data={topProducts}
-              columns={topProductsColumns}
-              itemsPerPage={15}
-              emptyMessage="ไม่มีข้อมูลสินค้าขายดี"
-              defaultSortKey="totalSales"
-              defaultSortOrder="desc"
-              keyExtractor={(item: TopProduct) => item.itemCode}
-              showSummary={true}
-              summaryConfig={{
-                labelColSpan: 1,
-                values: {
-                  totalQtySold: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.totalQtySold, 0);
-                    return <span className="font-medium text-black">{formatNumber(total)}</span>;
-                  },
-                  totalSales: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.totalSales, 0);
-                    return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
-                  },
-                  totalProfit: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.totalProfit, 0);
-                    return <span className="font-medium text-blue-600">฿{formatCurrency(total)}</span>;
-                  }
-                }
-              }}
-            />
-          )}
-        </DataCard>
-      </ErrorBoundary>
-
-      {/* Sales by Branch & Salesperson */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        <ErrorBoundary>
-          <DataCard
-            id="by-branch"
-            title="ยอดขายตามสาขา"
-            description="ยอดขายแยกตามสาขา/คลัง"
-            onExportExcel={() => exportStyledReport({
-              data: salesByBranch,
-              headers: { branchCode: 'รหัสสาขา', branchName: 'ชื่อสาขา', orderCount: 'จำนวนออเดอร์', totalSales: 'ยอดขาย' },
-              filename: 'ยอดขายตามสาขา',
-              sheetName: 'Sales by Branch',
-              title: 'รายงานยอดขายตามสาขา',
-              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-              numberColumns: ['orderCount'],
-              currencyColumns: ['totalSales'],
-              summaryConfig: {
-                columns: {
-                  orderCount: 'sum',
-                  totalSales: 'sum',
-                }
-              }
-            })}
-          >
-            {loading ? (
-              <TableSkeleton rows={8} />
-            ) : (
-              <PaginatedTable
-                data={salesByBranch}
-                columns={salesByBranchColumns}
-                itemsPerPage={10}
-                emptyMessage="ไม่มีข้อมูลสาขา"
-                defaultSortKey="totalSales"
-                defaultSortOrder="desc"
-                keyExtractor={(item: SalesByBranch) => item.branchCode}
-                showSummary={true}
-                summaryConfig={{
-                  labelColSpan: 1,
-                  values: {
-                    orderCount: (data) => {
-                      const total = data.reduce((sum, item) => sum + item.orderCount, 0);
-                      return <span className="font-medium text-black">{formatNumber(total)}</span>;
-                    },
-                    totalSales: (data) => {
-                      const total = data.reduce((sum, item) => sum + item.totalSales, 0);
-                      return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
-                    }
-                  }
-                }}
-              />
-            )}
-          </DataCard>
-        </ErrorBoundary>
-
-        <ErrorBoundary>
-          <DataCard
-            id="by-salesperson"
-            title="ยอดขายตามพนักงาน"
-            description="ยอดขายแยกตามพนักงานขาย"
-            onExportExcel={() => exportStyledReport({
-              data: salesBySalesperson,
-              headers: { saleCode: 'รหัสพนักงาน', saleName: 'ชื่อพนักงาน', customerCount: 'ลูกค้า', orderCount: 'ออเดอร์', totalSales: 'ยอดขาย', avgOrderValue: 'ยอดเฉลี่ย/ออเดอร์' },
-              filename: 'ยอดขายตามพนักงาน',
-              sheetName: 'Sales by Salesperson',
-              title: 'รายงานยอดขายตามพนักงาน',
-              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-              numberColumns: ['customerCount', 'orderCount'],
-              currencyColumns: ['totalSales', 'avgOrderValue'],
-              summaryConfig: {
-                columns: {
-                  customerCount: 'sum',
-                  orderCount: 'sum',
-                  totalSales: 'sum',
-                }
-              }
-            })}
-          >
-            {loading ? (
-              <TableSkeleton rows={8} />
-            ) : (
-              <PaginatedTable
-                data={salesBySalesperson}
-                columns={salesBySalespersonColumns}
-                itemsPerPage={10}
-                emptyMessage="ไม่มีข้อมูลพนักงานขาย"
-                defaultSortKey="totalSales"
-                defaultSortOrder="desc"
-                keyExtractor={(item: SalesBySalesperson) => item.saleCode}
-                showSummary={true}
-                summaryConfig={{
-                  labelColSpan: 1,
-                  values: {
-                    orderCount: (data) => {
-                      const total = data.reduce((sum, item) => sum + item.orderCount, 0);
-                      return <span className="font-medium text-black">{formatNumber(total)}</span>;
-                    },
-                    totalSales: (data) => {
-                      const total = data.reduce((sum, item) => sum + item.totalSales, 0);
-                      return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
-                    }
-                  }
-                }}
-              />
-            )}
-          </DataCard>
-        </ErrorBoundary>
-      </div>
-
-      {/* Top Customers Table */}
-      <ErrorBoundary>
-        <DataCard
-          id="top-customers"
-          title="ลูกค้ารายสำคัญ"
-          description="ลูกค้าที่มียอดซื้อสูงสุด"
-          onExportExcel={() => {
-            // คำนวณ avgOrderValue ก่อนส่งไป Excel
-            const dataWithAvg = trendData.map(item => ({
-              ...item,
-              avgOrderValue: item.orderCount > 0 ? item.sales / item.orderCount : 0
-            }));
-             exportStyledReport({
-            data: topCustomers,
-            headers: { customerCode: 'รหัสลูกค้า', customerName: 'ชื่อลูกค้า', orderCount: 'จำนวนออเดอร์', totalSpent: 'ยอดซื้อรวม', avgOrderValue: 'ยอดเฉลี่ย/ออเดอร์', lastOrderDate: 'ซื้อล่าสุด', daysSinceLastOrder: 'วันที่ผ่านมา' },
-            filename: 'ลูกค้ารายสำคัญ',
-            sheetName: 'Top Customers',
-            title: 'รายงานลูกค้ารายสำคัญ',
-            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-            numberColumns: ['orderCount', 'daysSinceLastOrder'],
-            currencyColumns: ['totalSpent', 'avgOrderValue'],
-            summaryConfig: {
-              columns: {
+                sales: 'sum',
                 orderCount: 'sum',
-                totalSpent: 'sum',
-                avgOrderValue: 'avg',
+                avgOrderValue: 'sum'
               }
             }
           });
-          }}
+        };
+
+      case 'top-products':
+        return () => exportStyledReport({
+          data: topProducts,
+          headers: { itemCode: 'รหัสสินค้า', itemName: 'ชื่อสินค้า', brandName: 'แบรนด์', categoryName: 'หมวดหมู่', totalQtySold: 'จำนวนขาย', totalSales: 'ยอดขาย', totalProfit: 'กำไร', profitMarginPct: 'อัตรากำไร (%)' },
+          filename: 'สินค้าขายดี',
+          sheetName: 'Top Products',
+          title: 'รายงานสินค้าขายดี',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          numberColumns: ['totalQtySold'],
+          currencyColumns: ['totalSales', 'totalProfit'],
+          percentColumns: ['profitMarginPct'],
+          summaryConfig: {
+            columns: {
+              totalQtySold: 'sum',
+              totalSales: 'sum',
+              totalProfit: 'sum',
+            }
+          }
+        });
+
+      case 'by-branch':
+        return () => exportStyledReport({
+          data: salesByBranch,
+          headers: { branchCode: 'รหัสสาขา', branchName: 'ชื่อสาขา', orderCount: 'จำนวนออเดอร์', totalSales: 'ยอดขาย' },
+          filename: 'ยอดขายตามสาขา',
+          sheetName: 'Sales by Branch',
+          title: 'รายงานยอดขายตามสาขา',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          numberColumns: ['orderCount'],
+          currencyColumns: ['totalSales'],
+          summaryConfig: {
+            columns: {
+              orderCount: 'sum',
+              totalSales: 'sum',
+            }
+          }
+        });
+
+      case 'by-salesperson':
+        return () => exportStyledReport({
+          data: salesBySalesperson,
+          headers: { saleCode: 'รหัสพนักงาน', saleName: 'ชื่อพนักงาน', customerCount: 'ลูกค้า', orderCount: 'ออเดอร์', totalSales: 'ยอดขาย', avgOrderValue: 'ยอดเฉลี่ย/ออเดอร์' },
+          filename: 'ยอดขายตามพนักงาน',
+          sheetName: 'Sales by Salesperson',
+          title: 'รายงานยอดขายตามพนักงาน',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          numberColumns: ['customerCount', 'orderCount'],
+          currencyColumns: ['totalSales', 'avgOrderValue'],
+          summaryConfig: {
+            columns: {
+              customerCount: 'sum',
+              orderCount: 'sum',
+              totalSales: 'sum',
+            }
+          }
+        });
+
+      case 'top-customers':
+        return () => exportStyledReport({
+          data: topCustomers,
+          headers: { customerCode: 'รหัสลูกค้า', customerName: 'ชื่อลูกค้า', orderCount: 'จำนวนออเดอร์', totalSpent: 'ยอดซื้อรวม', avgOrderValue: 'ยอดเฉลี่ย/ออเดอร์', lastOrderDate: 'ซื้อล่าสุด', daysSinceLastOrder: 'วันที่ผ่านมา' },
+          filename: 'ลูกค้ารายสำคัญ',
+          sheetName: 'Top Customers',
+          title: 'รายงานลูกค้ารายสำคัญ',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          numberColumns: ['orderCount', 'daysSinceLastOrder'],
+          currencyColumns: ['totalSpent', 'avgOrderValue'],
+          summaryConfig: {
+            columns: {
+              orderCount: 'sum',
+              totalSpent: 'sum',
+              avgOrderValue: 'avg',
+            }
+          }
+        });
+
+      case 'ar-status':
+        return () => exportStyledReport({
+          data: arStatus,
+          headers: { statusPayment: 'สถานะชำระ', invoiceCount: 'จำนวนใบแจ้งหนี้', totalInvoiceAmount: 'ยอดรวม', totalPaid: 'ชำระแล้ว', totalOutstanding: 'ค้างชำระ' },
+          filename: 'สถานะลูกหนี้การค้า',
+          sheetName: 'AR Status',
+          title: 'รายงานสถานะลูกหนี้การค้า',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          numberColumns: ['invoiceCount'],
+          currencyColumns: ['totalInvoiceAmount', 'totalPaid', 'totalOutstanding'],
+          summaryConfig: {
+            columns: {
+              invoiceCount: 'sum',
+              totalInvoiceAmount: 'sum',
+              totalPaid: 'sum',
+              totalOutstanding: 'sum',
+            }
+          }
+        });
+
+      default:
+        return undefined;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header with integrated controls */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">
+              รายงานยอดขายและลูกค้า
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              ข้อมูลรายงานยอดขาย สินค้า และลูกค้าในรูปแบบตาราง
+            </p>
+          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        </div>
+
+        {/* Compact Report Type Selector */}
+        <ReportTypeSelector
+          value={selectedReport}
+          options={reportOptions}
+          onChange={(value) => setSelectedReport(value as ReportType)}
+        />
+      </div>
+
+      {/* Error Display */}
+      {error && <ErrorDisplay error={error} onRetry={() => fetchReportData(selectedReport)} />}
+
+      {/* Report Content */}
+      <ErrorBoundary>
+        <DataCard
+          id={selectedReport}
+          title={currentReport?.label || ''}
+          description={currentReport?.description || ''}
+          onExportExcel={getExportFunction()}
         >
           {loading ? (
             <TableSkeleton rows={10} />
           ) : (
-            <PaginatedTable
-              data={topCustomers}
-              columns={topCustomersColumns}
-              itemsPerPage={10}
-              emptyMessage="ไม่มีข้อมูลลูกค้า"
-              defaultSortKey="totalSpent"
-              defaultSortOrder="desc"
-              keyExtractor={(item: TopCustomer) => item.customerCode}
-              showSummary={true}
-              summaryConfig={{
-                labelColSpan: 1,
-                values: {
-                  orderCount: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.orderCount, 0);
-                    return <span className="font-medium text-black">{formatNumber(total)}</span>;
-                  },
-                  totalSpent: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.totalSpent, 0);
-                    return <span className="font-medium text-green-600">฿{formatCurrency(total)}</span>;
-                  },
-                
-                  avgOrderValue: (data) => {
-                    // รวมค่า ยอดเฉลี่ย/ออเดอร์ ทุกแถว
-                    const totalAvg = data.reduce((sum, item) => {
-                      const avg = item.orderCount > 0 ? item.avgOrderValue : 0;
-                      return sum + avg;
-                    }, 0);
-                    return <span className="font-medium">฿{formatCurrency(totalAvg)}</span>;
-                  }
-
-                }
-              }}
-            />
-          )}
-        </DataCard>
-      </ErrorBoundary>
-
-      {/* AR Status Table */}
-      <ErrorBoundary>
-        <DataCard
-          id="ar-status"
-          title="สถานะลูกหนี้การค้า"
-          description="สรุปสถานะการชำระเงินของลูกค้า"
-          onExportExcel={() => exportStyledReport({
-            data: arStatus,
-            headers: { statusPayment: 'สถานะชำระ', invoiceCount: 'จำนวนใบแจ้งหนี้', totalInvoiceAmount: 'ยอดรวม', totalPaid: 'ชำระแล้ว', totalOutstanding: 'ค้างชำระ' },
-            filename: 'สถานะลูกหนี้การค้า',
-            sheetName: 'AR Status',
-            title: 'รายงานสถานะลูกหนี้การค้า',
-            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-            numberColumns: ['invoiceCount'],
-            currencyColumns: ['totalInvoiceAmount', 'totalPaid', 'totalOutstanding'],
-            summaryConfig: {
-              columns: {
-                invoiceCount: 'sum',
-                totalInvoiceAmount: 'sum',
-                totalPaid: 'sum',
-                totalOutstanding: 'sum',
-              }
-            }
-          })}
-        >
-          {loading ? (
-            <TableSkeleton rows={5} />
-          ) : (
-            <PaginatedTable
-              data={arStatus}
-              columns={arStatusColumns}
-              itemsPerPage={10}
-              emptyMessage="ไม่มีข้อมูลลูกหนี้"
-              defaultSortKey="totalOutstanding"
-              defaultSortOrder="desc"
-              keyExtractor={(item: ARStatus) => item.statusPayment}
-            />
+            renderReportContent()
           )}
         </DataCard>
       </ErrorBoundary>

@@ -14,6 +14,10 @@ import type {
 } from './types';
 import { calculateGrowth, getPreviousPeriod } from '@/lib/comparison';
 
+// ============================================================================
+// Data Fetching Functions
+// ============================================================================
+
 /**
  * Get Sales KPIs: Total sales, gross profit, orders, avg order value
  */
@@ -381,6 +385,72 @@ export async function getARStatus(dateRange: DateRange): Promise<ARStatus[]> {
 // ============================================
 
 /**
+ * Get Total Sales KPI Query
+ */
+export function getTotalSalesQuery(dateRange: DateRange): string {
+  const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
+  return `SELECT
+  sum(total_amount) as current_value,
+  (SELECT sum(total_amount)
+   FROM saleinvoice_transaction
+   WHERE status_cancel != 'Cancel'
+     AND doc_datetime BETWEEN '${previousPeriod.start}' AND '${previousPeriod.end}') as previous_value
+FROM saleinvoice_transaction
+WHERE status_cancel != 'Cancel'
+  AND doc_datetime BETWEEN '${dateRange.start}' AND '${dateRange.end}'`;
+}
+
+/**
+ * Get Gross Profit KPI Query
+ */
+export function getGrossProfitQuery(dateRange: DateRange): string {
+  const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
+  return `SELECT
+  sum(sid.sum_amount - sid.sum_of_cost) as current_value,
+  (SELECT sum(sid2.sum_amount - sid2.sum_of_cost)
+   FROM saleinvoice_transaction_detail sid2
+   JOIN saleinvoice_transaction si2 ON sid2.doc_no = si2.doc_no AND sid2.branch_sync = si2.branch_sync
+   WHERE si2.status_cancel != 'Cancel'
+     AND si2.doc_datetime BETWEEN '${previousPeriod.start}' AND '${previousPeriod.end}') as previous_value
+FROM saleinvoice_transaction_detail sid
+JOIN saleinvoice_transaction si ON sid.doc_no = si.doc_no AND sid.branch_sync = si.branch_sync
+WHERE si.status_cancel != 'Cancel'
+  AND si.doc_datetime BETWEEN '${dateRange.start}' AND '${dateRange.end}'`;
+}
+
+/**
+ * Get Total Orders KPI Query
+ */
+export function getTotalOrdersQuery(dateRange: DateRange): string {
+  const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
+  return `SELECT
+  count(DISTINCT doc_no) as current_value,
+  (SELECT count(DISTINCT doc_no)
+   FROM saleinvoice_transaction
+   WHERE status_cancel != 'Cancel'
+     AND doc_datetime BETWEEN '${previousPeriod.start}' AND '${previousPeriod.end}') as previous_value
+FROM saleinvoice_transaction
+WHERE status_cancel != 'Cancel'
+  AND doc_datetime BETWEEN '${dateRange.start}' AND '${dateRange.end}'`;
+}
+
+/**
+ * Get Average Order Value KPI Query
+ */
+export function getAvgOrderValueQuery(dateRange: DateRange): string {
+  const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
+  return `SELECT
+  avg(total_amount) as current_value,
+  (SELECT avg(total_amount)
+   FROM saleinvoice_transaction
+   WHERE status_cancel != 'Cancel'
+     AND doc_datetime BETWEEN '${previousPeriod.start}' AND '${previousPeriod.end}') as previous_value
+FROM saleinvoice_transaction
+WHERE status_cancel != 'Cancel'
+  AND doc_datetime BETWEEN '${dateRange.start}' AND '${dateRange.end}'`;
+}
+
+/**
  * Get Sales Trend Query with actual dates
  */
 export function getSalesTrendQuery(startDate: string, endDate: string): string {
@@ -502,60 +572,5 @@ WHERE status_cancel != 'Cancel'
   AND doc_datetime BETWEEN '${startDate}' AND '${endDate}'
 GROUP BY statusPayment
 ORDER BY totalOutstanding DESC
-  `.trim();
-}
-
-/**
- * Get Total Sales KPI Query with actual dates
- */
-export function getTotalSalesQuery(startDate: string, endDate: string): string {
-  return `
-SELECT
-  sum(total_amount) as totalSales
-FROM saleinvoice_transaction
-WHERE status_cancel != 'Cancel'
-  AND doc_datetime BETWEEN '${startDate}' AND '${endDate}'
-  `.trim();
-}
-
-/**
- * Get Gross Profit KPI Query with actual dates
- */
-export function getGrossProfitQuery(startDate: string, endDate: string): string {
-  return `
-SELECT
-  sum(sid.sum_amount - sid.sum_of_cost) as grossProfit,
-  sum(sid.sum_amount) as revenue,
-  (grossProfit / revenue) * 100 as grossMarginPct
-FROM saleinvoice_transaction_detail sid
-JOIN saleinvoice_transaction si ON sid.doc_no = si.doc_no AND sid.branch_sync = si.branch_sync
-WHERE si.status_cancel != 'Cancel'
-  AND si.doc_datetime BETWEEN '${startDate}' AND '${endDate}'
-  `.trim();
-}
-
-/**
- * Get Total Orders KPI Query with actual dates
- */
-export function getTotalOrdersQuery(startDate: string, endDate: string): string {
-  return `
-SELECT
-  count(DISTINCT doc_no) as totalOrders
-FROM saleinvoice_transaction
-WHERE status_cancel != 'Cancel'
-  AND doc_datetime BETWEEN '${startDate}' AND '${endDate}'
-  `.trim();
-}
-
-/**
- * Get Average Order Value KPI Query with actual dates
- */
-export function getAvgOrderValueQuery(startDate: string, endDate: string): string {
-  return `
-SELECT
-  avg(total_amount) as avgOrderValue
-FROM saleinvoice_transaction
-WHERE status_cancel != 'Cancel'
-  AND doc_datetime BETWEEN '${startDate}' AND '${endDate}'
   `.trim();
 }

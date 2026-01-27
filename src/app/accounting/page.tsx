@@ -16,11 +16,11 @@ import { Wallet, CreditCard, PiggyBank, TrendingUp, TrendingDown } from 'lucide-
 import { getDateRange } from '@/lib/dateRanges';
 import { formatGrowthPercentage } from '@/lib/comparison';
 import type { DateRange, AccountingKPIs, ProfitLossData, BalanceSheetItem, CashFlowData, AgingItem, CategoryBreakdown } from '@/lib/data/types';
-import { 
-  getAssetsQuery, 
-  getLiabilitiesQuery, 
-  getEquityQuery, 
-  getRevenueQuery, 
+import {
+  getAssetsQuery,
+  getLiabilitiesQuery,
+  getEquityQuery,
+  getRevenueQuery,
   getExpensesQuery,
   getProfitLossQuery,
   getBalanceSheetQuery,
@@ -229,8 +229,8 @@ export default function AccountingPage() {
       {/* Balance Sheet & Cash Flow */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard 
-            title="งบดุล" 
+          <DataCard
+            title="งบดุล"
             description="สินทรัพย์ หนี้สิน และส่วนของผู้ถือหุ้น"
             linkTo="/reports/accounting#balance-sheet"
             queryInfo={{
@@ -247,8 +247,8 @@ export default function AccountingPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard 
-            title="กระแสเงินสด" 
+          <DataCard
+            title="กระแสเงินสด"
             description="จากกิจกรรมดำเนินงาน ลงทุน และจัดหาเงิน"
             linkTo="/reports/accounting#cash-flow"
             queryInfo={{
@@ -268,8 +268,8 @@ export default function AccountingPage() {
       {/* AR & AP Aging */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ErrorBoundary>
-          <DataCard 
-            title="อายุลูกหนี้ (AR Aging)" 
+          <DataCard
+            title="อายุลูกหนี้ (AR Aging)"
             description="รายการลูกหนี้ค้างชำระ"
             linkTo="/reports/accounting#ar-aging"
             queryInfo={{
@@ -286,8 +286,8 @@ export default function AccountingPage() {
         </ErrorBoundary>
 
         <ErrorBoundary>
-          <DataCard 
-            title="อายุเจ้าหนี้ (AP Aging)" 
+          <DataCard
+            title="อายุเจ้าหนี้ (AP Aging)"
             description="รายการเจ้าหนี้ค้างชำระ"
             linkTo="/reports/accounting#ap-aging"
             queryInfo={{
@@ -306,10 +306,10 @@ export default function AccountingPage() {
 
       {/* Revenue & Expense Breakdown */}
       <ErrorBoundary>
-        <DataCard 
-          title="รายได้และค่าใช้จ่ายตามหมวด" 
+        <DataCard
+          title="รายได้และค่าใช้จ่ายตามหมวด"
           description="สัดส่วนรายได้และค่าใช้จ่ายแยกตามประเภท"
-          linkTo="/reports/accounting#revenue-expense"
+          linkTo="/reports/accounting#revenue-breakdown"
           queryInfo={{
             query: `-- Revenue Breakdown\n${getRevenueBreakdownQuery(dateRange)}\n\n-- Expense Breakdown\n${getExpenseBreakdownQuery(dateRange)}`,
             format: 'JSONEachRow'

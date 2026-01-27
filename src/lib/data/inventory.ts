@@ -14,13 +14,16 @@ import type {
 } from './types';
 import { calculateGrowth, getPreviousPeriod } from '@/lib/comparison';
 
+// ============================================================================
+// Data Fetching Functions
+// ============================================================================
+
 /**
  * Get Inventory KPIs: Total inventory value, items in stock, low stock alerts, overstock alerts
  * Note: stock_transaction table has qty (>0=in, <0=out), cost, amount
  * We calculate current stock by summing qty per item
  */
-export async function getInventoryKPIs(asOfDate: string): Promise<InventoryKPIs> 
-{
+export async function getInventoryKPIs(asOfDate: string): Promise<InventoryKPIs> {
   try {
     // Calculate current stock per item by summing qty (in/out movements)
     // Total Inventory Value (sum of qty * cost for items with positive stock)
@@ -130,7 +133,7 @@ export async function getInventoryKPIs(asOfDate: string): Promise<InventoryKPIs>
  * Get Stock Movement (IN/OUT) over time
  */
 export async function getStockMovement(dateRange: DateRange): Promise<StockMovement[]> {
-    const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
+  const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
   try {
     const query = `
       SELECT
@@ -453,9 +456,9 @@ export async function getStockByBranch(asOfDate: string): Promise<StockByBranch[
   }
 }
 
-// ============================================
-// Query Functions for SQL Popup Display
-// ============================================
+// ============================================================================
+// Query Export Functions (for View SQL Query feature)
+// ============================================================================
 
 export function getInventoryValueQuery(asOfDate: string): string {
   return `SELECT

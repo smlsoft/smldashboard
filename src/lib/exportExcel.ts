@@ -1,7 +1,8 @@
 'use client';
 
 import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
+import FileSaver from 'file-saver';
+const { saveAs } = FileSaver;
 
 
 /**

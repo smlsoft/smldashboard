@@ -266,7 +266,7 @@ export default function SalesPage() {
           <DataCard
             title="ยอดขายตามพนักงานขาย"
             description="ผลงานพนักงานขายแต่ละคน"
-            linkTo="/reports/sales#sales-by-salesperson"
+            linkTo="/reports/sales#by-salesperson"
             queryInfo={{
               query: getSalesBySalespersonQuery(dateRange.start, dateRange.end),
               format: 'JSONEachRow'
@@ -288,7 +288,7 @@ export default function SalesPage() {
             <DataCard
               title="ยอดขายแยกตามสาขา"
               description="เปรียบเทียบยอดขายของแต่ละสาขา"
-              linkTo="/reports/sales#sales-by-branch"
+              linkTo="/reports/sales#by-branch"
               queryInfo={{
                 query: getSalesByBranchQuery(dateRange.start, dateRange.end),
                 format: 'JSONEachRow'

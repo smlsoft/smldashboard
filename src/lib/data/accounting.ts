@@ -13,9 +13,9 @@ import type {
 } from './types';
 import { calculateGrowth, getPreviousPeriod } from '@/lib/comparison';
 
-// ====================================
-// SQL Query Functions - Generate queries with actual dates
-// ====================================
+// ============================================================================
+// Query Export Functions (for View SQL Query feature)
+// ============================================================================
 
 export function getAssetsQuery(dateRange: DateRange): string {
   const previousPeriod = getPreviousPeriod(dateRange, 'PreviousPeriod');
@@ -247,6 +247,10 @@ export function getExpenseBreakdownQuery(dateRange: DateRange): string {
     ORDER BY amount DESC
   `;
 }
+
+// ============================================================================
+// Data Fetching Functions
+// ============================================================================
 
 /**
  * Get Accounting KPIs: Assets, Liabilities, Equity, Revenue, Expenses

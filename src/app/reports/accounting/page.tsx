@@ -1,23 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { DataCard } from '@/components/DataCard';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { ErrorBoundary, ErrorDisplay } from '@/components/ErrorBoundary';
 import { TableSkeleton } from '@/components/LoadingSkeleton';
 import { PaginatedTable, type ColumnDef } from '@/components/PaginatedTable';
+import { ReportTypeSelector, type ReportOption } from '@/components/ReportTypeSelector';
+import {
+  TrendingDown,
+  Scale,
+  Droplets,
+  Clock,
+  Users,
+  PieChart,
+} from 'lucide-react';
 import { getDateRange } from '@/lib/dateRanges';
 import { exportStyledReport } from '@/lib/exportExcel';
-import type { 
-  DateRange, 
-  ProfitLossData, 
-  BalanceSheetItem, 
-  CashFlowData, 
-  AgingItem, 
-  CategoryBreakdown 
+import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters';
+import { useReportHash } from '@/hooks/useReportHash';
+import type {
+  DateRange,
+  ProfitLossData,
+  BalanceSheetItem,
+  CashFlowData,
+  AgingItem,
+  CategoryBreakdown
 } from '@/lib/data/types';
-import { 
+import {
   getProfitLossQuery,
   getBalanceSheetQuery,
   getCashFlowQuery,
@@ -26,45 +36,88 @@ import {
   getRevenueBreakdownQuery,
   getExpenseBreakdownQuery,
 } from '@/lib/data/accounting';
-import { reverse } from 'dns';
+
+// Report types
+type ReportType =
+  | 'profit-loss'
+  | 'balance-sheet'
+  | 'cash-flow'
+  | 'ar-aging'
+  | 'ap-aging'
+  | 'revenue-breakdown'
+  | 'expense-breakdown';
+
+const reportOptions: ReportOption<ReportType>[] = [
+  {
+    value: 'profit-loss',
+    label: 'งบกำไรขาดทุน',
+    icon: TrendingDown,
+    description: 'รายได้ ค่าใช้จ่าย และกำไรสุทธิรายเดือน',
+  },
+  {
+    value: 'balance-sheet',
+    label: 'งบดุล',
+    icon: Scale,
+    description: 'รายการสินทรัพย์ หนี้สิน และส่วนของผู้ถือหุ้น',
+  },
+  {
+    value: 'cash-flow',
+    label: 'งบกระแสเงินสด',
+    icon: Droplets,
+    description: 'กระแสเงินสดจากกิจกรรมต่างๆ',
+  },
+  {
+    value: 'ar-aging',
+    label: 'อายุลูกหนี้',
+    icon: Clock,
+    description: 'รายการลูกหนี้ค้างชำระทั้งหมด',
+  },
+  {
+    value: 'ap-aging',
+    label: 'อายุเจ้าหนี้',
+    icon: Users,
+    description: 'รายการเจ้าหนี้ค้างชำระทั้งหมด',
+  },
+  {
+    value: 'revenue-breakdown',
+    label: 'รายได้ตามหมวด',
+    icon: PieChart,
+    description: 'สัดส่วนรายได้แยกตามประเภทบัญชี',
+  },
+  {
+    value: 'expense-breakdown',
+    label: 'ค่าใช้จ่ายตามหมวด',
+    icon: PieChart,
+    description: 'สัดส่วนค่าใช้จ่ายแยกตามประเภทบัญชี',
+  },
+];
 
 export default function AccountingReportPage() {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRange('THIS_MONTH'));
-  const [loading, setLoading] = useState(true);
+  const [selectedReport, setSelectedReport] = useState<ReportType>('profit-loss');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Data states
   const [profitLossData, setProfitLossData] = useState<ProfitLossData[]>([]);
   const [balanceSheetData, setBalanceSheetData] = useState<BalanceSheetItem[]>([]);
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
-
-  // Balance sheet filter
-  const [balanceSheetTypeFilter, setBalanceSheetTypeFilter] = useState<string>('all');
   const [arAgingData, setArAgingData] = useState<AgingItem[]>([]);
   const [apAgingData, setApAgingData] = useState<AgingItem[]>([]);
   const [revenueBreakdown, setRevenueBreakdown] = useState<CategoryBreakdown[]>([]);
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryBreakdown[]>([]);
 
-  // Scroll to hash element after loading
-  useEffect(() => {
-    if (!loading && typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      if (hash) {
-        const element = document.querySelector(hash);
-        if (element) {
-          setTimeout(() => {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 100);
-        }
-      }
-    }
-  }, [loading]);
+  // Balance sheet filter
+  const [balanceSheetTypeFilter, setBalanceSheetTypeFilter] = useState<string>('all');
+
+  // Handle URL hash for report selection
+  useReportHash(reportOptions, setSelectedReport);
 
   useEffect(() => {
-    fetchAllData();
-  }, [dateRange]);
+    fetchReportData(selectedReport);
+  }, [dateRange, selectedReport]);
 
-  const fetchAllData = async () => {
+  const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
     setError(null);
 
@@ -74,76 +127,67 @@ export default function AccountingReportPage() {
         end_date: dateRange.end,
       });
 
-      const [
-        plRes,
-        bsRes,
-        cfRes,
-        arRes,
-        apRes,
-        breakdownRes,
-      ] = await Promise.all([
-        fetch(`/api/accounting/profit-loss?${params}`),
-        fetch(`/api/accounting/balance-sheet?as_of_date=${dateRange.end}`),
-        fetch(`/api/accounting/cash-flow?${params}`),
-        fetch('/api/accounting/ar-aging'),
-        fetch('/api/accounting/ap-aging'),
-        fetch(`/api/accounting/revenue-expense-breakdown?${params}`),
-      ]);
+      let endpoint = '';
+      switch (reportType) {
+        case 'profit-loss':
+          endpoint = `/api/accounting/profit-loss?${params}`;
+          break;
+        case 'balance-sheet':
+          endpoint = `/api/accounting/balance-sheet?as_of_date=${dateRange.end}`;
+          break;
+        case 'cash-flow':
+          endpoint = `/api/accounting/cash-flow?${params}`;
+          break;
+        case 'ar-aging':
+          endpoint = '/api/accounting/ar-aging';
+          break;
+        case 'ap-aging':
+          endpoint = '/api/accounting/ap-aging';
+          break;
+        case 'revenue-breakdown':
+        case 'expense-breakdown':
+          endpoint = `/api/accounting/revenue-expense-breakdown?${params}`;
+          break;
+      }
 
-      if (!plRes.ok) throw new Error('Failed to fetch P&L data');
-      if (!bsRes.ok) throw new Error('Failed to fetch balance sheet');
-      if (!cfRes.ok) throw new Error('Failed to fetch cash flow');
-      if (!arRes.ok) throw new Error('Failed to fetch AR aging');
-      if (!apRes.ok) throw new Error('Failed to fetch AP aging');
-      if (!breakdownRes.ok) throw new Error('Failed to fetch breakdown');
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error(`Failed to fetch ${reportType} data`);
 
-      const [plData, bsData, cfData, arData, apData, breakdownData] = await Promise.all([
-        plRes.json(),
-        bsRes.json(),
-        cfRes.json(),
-        arRes.json(),
-        apRes.json(),
-        breakdownRes.json(),
-      ]);
+      const result = await response.json();
 
-      setProfitLossData(plData.data);
-      setBalanceSheetData(bsData.data);
-      setCashFlowData(cfData.data);
-      setArAgingData(arData.data);
-      setApAgingData(apData.data);
-      setRevenueBreakdown(breakdownData.data.revenue);
-      setExpenseBreakdown(breakdownData.data.expenses);
+      switch (reportType) {
+        case 'profit-loss':
+          setProfitLossData(result.data);
+          break;
+        case 'balance-sheet':
+          setBalanceSheetData(result.data);
+          break;
+        case 'cash-flow':
+          setCashFlowData(result.data);
+          break;
+        case 'ar-aging':
+          setArAgingData(result.data);
+          break;
+        case 'ap-aging':
+          setApAgingData(result.data);
+          break;
+        case 'revenue-breakdown':
+          setRevenueBreakdown(result.data.revenue);
+          setExpenseBreakdown(result.data.expenses);
+          break;
+        case 'expense-breakdown':
+          if (!revenueBreakdown.length) {
+            setRevenueBreakdown(result.data.revenue);
+          }
+          setExpenseBreakdown(result.data.expenses);
+          break;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
       console.error('Error fetching accounting data:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Helper function สำหรับ format ค่า
-  const formatCurrency = (value: number): string => {
-    return value.toLocaleString('th-TH', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('th-TH', {
-      day: '2-digit',
-      month: 'short',
-      year: '2-digit',
-    });
-  };
-
-  const formatMonth = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('th-TH', {
-      month: 'long',
-      year: 'numeric',
-    });
   };
 
   const getAgingColor = (bucket: string): string => {
@@ -224,11 +268,10 @@ export default function AccountingReportPage() {
       sortable: true,
       align: 'center',
       render: (item: BalanceSheetItem) => (
-        <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
-          item.typeName === 'สินทรัพย์' ? 'bg-green-200 text-green-700' :
+        <span className={`px-2 py-1 rounded-lg text-xs font-medium ${item.typeName === 'สินทรัพย์' ? 'bg-green-200 text-green-700' :
           item.typeName === 'หนี้สิน' ? 'bg-red-200 text-red-700' :
-          'bg-blue-200 text-blue-700'
-        }`}>
+            'bg-blue-200 text-blue-700'
+          }`}>
           {item.typeName}
         </span>
       ),
@@ -291,8 +334,8 @@ export default function AccountingReportPage() {
     },
   ];
 
-  // Column definitions for AR Aging
-  const arAgingColumns: ColumnDef<AgingItem>[] = [
+  // Column definitions for AR/AP Aging
+  const agingColumns: ColumnDef<AgingItem>[] = [
     {
       key: 'docNo',
       header: 'เลขที่เอกสาร',
@@ -304,7 +347,7 @@ export default function AccountingReportPage() {
     },
     {
       key: 'name',
-      header: 'ลูกค้า',
+      header: selectedReport === 'ar-aging' ? 'ลูกค้า' : 'ซัพพลายเออร์',
       sortable: true,
       align: 'left',
       render: (item: AgingItem) => (
@@ -345,86 +388,34 @@ export default function AccountingReportPage() {
     },
   ];
 
-  // Column definitions for AP Aging
-  const apAgingColumns: ColumnDef<AgingItem>[] = [
+  // Column definitions for Category Breakdown
+  const breakdownColumns: ColumnDef<CategoryBreakdown>[] = [
     {
-      key: 'docNo',
-      header: 'เลขที่เอกสาร',
-      sortable: false,
-      align: 'left',
-      render: (item: AgingItem) => (
-        <span className="font-mono text-xs">{item.docNo}</span>
-      ),
-    },
-    {
-      key: 'name',
-      header: 'ซัพพลายเออร์',
+      key: 'accountGroup',
+      header: 'รหัสกลุ่ม',
       sortable: true,
       align: 'left',
-      render: (item: AgingItem) => (
-        <div>
-          <div className="font-medium">{item.name}</div>
-          <div className="text-xs text-muted-foreground">{item.code}</div>
-        </div>
+      render: (item: CategoryBreakdown) => (
+        <span className="font-mono text-xs">{item.accountGroup}</span>
       ),
     },
     {
-      key: 'dueDate',
-      header: 'วันครบกำหนด',
+      key: 'accountName',
+      header: 'ชื่อบัญชี',
+      sortable: true,
+      align: 'left',
+    },
+    {
+      key: 'amount',
+      header: 'จำนวนเงิน',
       sortable: true,
       align: 'right',
-      render: (item: AgingItem) => (
-        <span className="text-xs">{formatDate(item.dueDate)}</span>
-      ),
-    },
-    {
-      key: 'outstanding',
-      header: 'ยอดค้างชำระ',
-      sortable: true,
-      align: 'right',
-      render: (item: AgingItem) => (
-        <span className="font-medium">฿{formatCurrency(item.outstanding)}</span>
-      ),
-    },
-    {
-      key: 'agingBucket',
-      header: 'อายุหนี้',
-      sortable: true,
-      align: 'center',
-      render: (item: AgingItem) => (
-        <span className={getAgingColor(item.agingBucket)}>
-          {item.agingBucket}
+      render: (item: CategoryBreakdown) => (
+        <span className={`font-medium ${selectedReport === 'revenue-breakdown' ? 'text-green-600' : 'text-red-600'}`}>
+          ฿{formatCurrency(item.amount)}
         </span>
       ),
     },
-  ];
-
-  // Column definitions for Revenue Breakdown
-  const revenueBreakdownColumns: ColumnDef<CategoryBreakdown>[] = [
-    {
-      key: 'accountGroup',
-      header: 'รหัสกลุ่ม',
-      sortable: true,
-      align: 'left',
-      render: (item: CategoryBreakdown) => (
-        <span className="font-mono text-xs">{item.accountGroup}</span>
-      ),
-    },
-    {
-      key: 'accountName',
-      header: 'ชื่อบัญชี',
-      sortable: true,
-      align: 'left',
-    },
-    {
-      key: 'amount',
-      header: 'จำนวนเงิน',
-      sortable: true,
-      align: 'right',
-      render: (item: CategoryBreakdown) => (
-        <span className="font-medium text-green-600">฿{formatCurrency(item.amount)}</span>
-      ),
-    },
     {
       key: 'percentage',
       header: 'สัดส่วน',
@@ -436,158 +427,326 @@ export default function AccountingReportPage() {
     },
   ];
 
-  // Column definitions for Expense Breakdown
-  const expenseBreakdownColumns: ColumnDef<CategoryBreakdown>[] = [
-    {
-      key: 'accountGroup',
-      header: 'รหัสกลุ่ม',
-      sortable: true,
-      align: 'left',
-      render: (item: CategoryBreakdown) => (
-        <span className="font-mono text-xs">{item.accountGroup}</span>
-      ),
-    },
-    {
-      key: 'accountName',
-      header: 'ชื่อบัญชี',
-      sortable: true,
-      align: 'left',
-    },
-    {
-      key: 'amount',
-      header: 'จำนวนเงิน',
-      sortable: true,
-      align: 'right',
-      render: (item: CategoryBreakdown) => (
-        <span className="font-medium text-red-600">฿{formatCurrency(item.amount)}</span>
-      ),
-    },
-    {
-      key: 'percentage',
-      header: 'สัดส่วน',
-      sortable: true,
-      align: 'right',
-      render: (item: CategoryBreakdown) => (
-        <span className="text-muted-foreground">{item.percentage.toFixed(1)}%</span>
-      ),
-    },
-  ];
+  // Get current report option
+  const currentReport = reportOptions.find(opt => opt.value === selectedReport);
+
+  // Render report content based on selected type
+  const renderReportContent = () => {
+    switch (selectedReport) {
+      case 'profit-loss':
+        return (
+          <PaginatedTable
+            data={profitLossData}
+            columns={profitLossColumns}
+            itemsPerPage={12}
+            emptyMessage="ไม่มีข้อมูลงบกำไรขาดทุน"
+            defaultSortKey="month"
+            defaultSortOrder="desc"
+            keyExtractor={(item: ProfitLossData) => item.month}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                revenue: (data) => (
+                  <span className="text-green-600 font-bold">
+                    ฿{formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
+                  </span>
+                ),
+                expenses: (data) => (
+                  <span className="text-red-600 font-bold">
+                    ฿{formatCurrency(data.reduce((sum, item) => sum + item.expenses, 0))}
+                  </span>
+                ),
+                netProfit: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.netProfit, 0);
+                  return (
+                    <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      ฿{formatCurrency(total)}
+                    </span>
+                  );
+                },
+              },
+            }}
+          />
+        );
+
+      case 'balance-sheet':
+        return (
+          <PaginatedTable
+            data={balanceSheetTypeFilter === 'all'
+              ? balanceSheetData
+              : balanceSheetData.filter(item => item.typeName === balanceSheetTypeFilter)
+            }
+            columns={balanceSheetColumns}
+            itemsPerPage={15}
+            emptyMessage="ไม่มีข้อมูลงบดุล"
+            defaultSortKey="accountCode"
+            defaultSortOrder="asc"
+            keyExtractor={(item: BalanceSheetItem) => item.accountCode}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 2,
+              values: {
+                balance: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.balance, 0);
+                  return (
+                    <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      ฿{formatCurrency(total)}
+                    </span>
+                  );
+                }
+              }
+            }}
+          />
+        );
+
+      case 'cash-flow':
+        return (
+          <PaginatedTable
+            data={cashFlowData}
+            columns={cashFlowColumns}
+            itemsPerPage={10}
+            emptyMessage="ไม่มีข้อมูลกระแสเงินสด"
+            keyExtractor={(item: CashFlowData) => item.activityType}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                revenue: (data) => (
+                  <span className="text-green-600 font-bold">
+                    ฿{formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
+                  </span>
+                ),
+                expenses: (data) => (
+                  <span className="text-red-600 font-bold">
+                    ฿{formatCurrency(data.reduce((sum, item) => sum + item.expenses, 0))}
+                  </span>
+                ),
+                netCashFlow: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.netCashFlow, 0);
+                  return (
+                    <span className={`font-bold ${total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ฿{formatCurrency(total)}
+                    </span>
+                  );
+                },
+              }
+            }}
+          />
+        );
+
+      case 'ar-aging':
+      case 'ap-aging':
+        const agingData = selectedReport === 'ar-aging' ? arAgingData : apAgingData;
+        return (
+          <PaginatedTable
+            data={agingData}
+            columns={agingColumns}
+            itemsPerPage={10}
+            emptyMessage={selectedReport === 'ar-aging' ? 'ไม่มีลูกหนี้ค้างชำระ' : 'ไม่มีเจ้าหนี้ค้างชำระ'}
+            defaultSortKey="outstanding"
+            defaultSortOrder="desc"
+            keyExtractor={(item: AgingItem) => item.docNo}
+          />
+        );
+
+      case 'revenue-breakdown':
+      case 'expense-breakdown':
+        const breakdownData = selectedReport === 'revenue-breakdown' ? revenueBreakdown : expenseBreakdown;
+        return (
+          <PaginatedTable
+            data={breakdownData}
+            columns={breakdownColumns}
+            itemsPerPage={10}
+            emptyMessage="ไม่มีข้อมูล"
+            defaultSortKey="amount"
+            defaultSortOrder="desc"
+            keyExtractor={(item: CategoryBreakdown) => item.accountGroup}
+            showSummary={true}
+            summaryConfig={{
+              labelColSpan: 1,
+              values: {
+                amount: (data) => {
+                  const total = data.reduce((sum, item) => sum + item.amount, 0);
+                  return (
+                    <span className={`font-bold ${selectedReport === 'revenue-breakdown' ? 'text-green-600' : 'text-red-600'}`}>
+                      ฿{formatCurrency(total)}
+                    </span>
+                  );
+                }
+              }
+            }}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Get export function based on report type
+  const getExportFunction = () => {
+    switch (selectedReport) {
+      case 'profit-loss':
+        return () => exportStyledReport({
+          data: profitLossData,
+          headers: { month: 'เดือน', revenue: 'รายได้', expenses: 'ค่าใช้จ่าย', netProfit: 'กำไรสุทธิ' },
+          filename: 'รายงานงบกำไรขาดทุน',
+          sheetName: 'Profit & Loss',
+          title: 'รายงานงบกำไรขาดทุน',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          currencyColumns: ['revenue', 'expenses', 'netProfit'],
+          summaryConfig: {
+            columns: {
+              revenue: 'sum',
+              expenses: 'sum',
+              netProfit: 'sum',
+            }
+          }
+        });
+
+      case 'balance-sheet':
+        return () => exportStyledReport({
+          data: balanceSheetTypeFilter === 'all'
+            ? balanceSheetData
+            : balanceSheetData.filter(item => item.typeName === balanceSheetTypeFilter),
+          headers: { accountCode: 'รหัสบัญชี', accountName: 'ชื่อบัญชี', typeName: 'ประเภท', balance: 'ยอดคงเหลือ' },
+          filename: 'รายงานงบดุล',
+          sheetName: 'Balance Sheet',
+          title: 'รายงานงบดุล',
+          subtitle: `ณ วันที่ ${dateRange.end}`,
+          currencyColumns: ['balance'],
+          summaryConfig: {
+            columns: {
+              balance: 'sum',
+            }
+          }
+        });
+
+      case 'cash-flow':
+        return () => exportStyledReport({
+          data: cashFlowData,
+          headers: { activityType: 'ประเภทกิจกรรม', revenue: 'เงินสดรับ', expenses: 'เงินสดจ่าย', netCashFlow: 'กระแสเงินสดสุทธิ' },
+          filename: 'รายงานงบกระแสเงินสด',
+          sheetName: 'Cash Flow',
+          title: 'รายงานงบกระแสเงินสด',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          currencyColumns: ['revenue', 'expenses', 'netCashFlow'],
+          summaryConfig: {
+            columns: {
+              revenue: 'sum',
+              expenses: 'sum',
+              netCashFlow: 'sum',
+            }
+          }
+        });
+
+      case 'ar-aging':
+        return () => exportStyledReport({
+          data: arAgingData,
+          headers: { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ลูกค้า', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
+          filename: 'รายงานอายุลูกหนี้',
+          sheetName: 'AR Aging',
+          title: 'รายงานอายุลูกหนี้ (AR Aging)',
+          subtitle: `ณ วันที่ ${new Date().toLocaleDateString('th-TH')}`,
+          currencyColumns: ['outstanding'],
+          summaryConfig: {
+            columns: {
+              outstanding: 'sum',
+            }
+          }
+        });
+
+      case 'ap-aging':
+        return () => exportStyledReport({
+          data: apAgingData,
+          headers: { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ซัพพลายเออร์', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
+          filename: 'รายงานอายุเจ้าหนี้',
+          sheetName: 'AP Aging',
+          title: 'รายงานอายุเจ้าหนี้ (AP Aging)',
+          subtitle: `ณ วันที่ ${new Date().toLocaleDateString('th-TH')}`,
+          currencyColumns: ['outstanding'],
+          summaryConfig: {
+            columns: {
+              outstanding: 'sum',
+            }
+          }
+        });
+
+      case 'revenue-breakdown':
+        return () => exportStyledReport({
+          data: revenueBreakdown,
+          headers: { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
+          filename: 'รายงานรายได้ตามหมวด',
+          sheetName: 'Revenue Breakdown',
+          title: 'รายงานรายได้ตามหมวด',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          currencyColumns: ['amount'],
+          percentColumns: ['percentage'],
+          summaryConfig: {
+            columns: {
+              amount: 'sum',
+            }
+          }
+        });
+
+      case 'expense-breakdown':
+        return () => exportStyledReport({
+          data: expenseBreakdown,
+          headers: { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
+          filename: 'รายงานค่าใช้จ่ายตามหมวด',
+          sheetName: 'Expense Breakdown',
+          title: 'รายงานค่าใช้จ่ายตามหมวด',
+          subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
+          currencyColumns: ['amount'],
+          percentColumns: ['percentage'],
+          summaryConfig: {
+            columns: {
+              amount: 'sum',
+            }
+          }
+        });
+
+      default:
+        return undefined;
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            รายงานบัญชี
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            ข้อมูลรายงานทางบัญชีและการเงินในรูปแบบตาราง
-          </p>
+      {/* Header with integrated controls */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">
+              รายงานบัญชี
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              ข้อมูลรายงานทางบัญชีและการเงินในรูปแบบตาราง
+            </p>
+          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
         </div>
-        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
+        {/* Compact Report Type Selector */}
+        <ReportTypeSelector
+          value={selectedReport}
+          options={reportOptions}
+          onChange={(value) => setSelectedReport(value as ReportType)}
+        />
       </div>
 
       {/* Error Display */}
-      {error && (
-        <ErrorDisplay error={error} onRetry={fetchAllData} />
-      )}
+      {error && <ErrorDisplay error={error} onRetry={() => fetchReportData(selectedReport)} />}
 
-      {/* Profit & Loss Table */}
+      {/* Report Content */}
       <ErrorBoundary>
         <DataCard
-          id="profit-loss"
-          title="กำไร(ขาดทุน) สุทธิ"
-          description="รายได้ ค่าใช้จ่าย และกำไรสุทธิรายเดือน"
-          queryInfo={{
-            query: getProfitLossQuery(dateRange),
-            format: 'JSONEachRow'
-          }}
-          onExportExcel={() => exportStyledReport({
-            data: profitLossData,
-            headers: { month: 'เดือน', revenue: 'รายได้', expenses: 'ค่าใช้จ่าย', netProfit: 'กำไรสุทธิ' },
-            filename: 'รายงานงบกำไรขาดทุน',
-            sheetName: 'Profit & Loss',
-            title: 'รายงานงบกำไรขาดทุน',
-            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-            currencyColumns: ['revenue', 'expenses', 'netProfit'],
-            summaryConfig: {
-              columns: {
-                revenue: 'sum',
-                expenses: 'sum',
-                netProfit: 'sum',
-              }
-            }
-          })}
-        >
-          {loading ? (
-            <TableSkeleton rows={6} />
-          ) : (
-            <PaginatedTable
-              data={profitLossData}
-              columns={profitLossColumns}
-              itemsPerPage={12}
-              emptyMessage="ไม่มีข้อมูลงบกำไรขาดทุน"
-              defaultSortKey="month"
-              defaultSortOrder="desc"
-              keyExtractor={(item: ProfitLossData) => item.month}
-              showSummary={true}
-              summaryConfig={{
-                labelColSpan: 1,
-                values: {
-                  revenue: (data) => (
-                    <span className="text-green-600 font-bold">
-                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
-                    </span>
-                  ),
-                  expenses: (data) => (
-                    <span className="text-red-600 font-bold">
-                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.expenses, 0))}
-                    </span>
-                  ),
-                  netProfit: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.netProfit, 0);
-                    return (
-                      <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        ฿{formatCurrency(total)}
-                      </span>
-                    );
-                  },
-                },
-              }}
-            />
-          )}
-        </DataCard>
-      </ErrorBoundary>
-
-      {/* Balance Sheet Table */}
-      <ErrorBoundary>
-        <DataCard
-          id="balance-sheet"
-          title="งบดุล"
-          description="รายการสินทรัพย์ หนี้สิน และส่วนของผู้ถือหุ้น"
-          queryInfo={{
-            query: getBalanceSheetQuery(dateRange.end),
-            format: 'JSONEachRow'
-          }} 
-          onExportExcel={() => exportStyledReport({
-            data: balanceSheetTypeFilter === 'all' 
-              ? balanceSheetData 
-              : balanceSheetData.filter(item => item.typeName === balanceSheetTypeFilter),
-            headers: { accountCode: 'รหัสบัญชี', accountName: 'ชื่อบัญชี', typeName: 'ประเภท', balance: 'ยอดคงเหลือ' },
-            filename: 'รายงานงบดุล',
-            sheetName: 'Balance Sheet',
-            title: 'รายงานงบดุล',
-            subtitle: `ณ วันที่ ${dateRange.end}`,
-            currencyColumns: ['balance'],
-            summaryConfig: {
-              columns: {
-                balance: 'sum',
-              }
-            }
-          })}
-          headerExtra={
-            <div className="flex items-center gap-2 -mb-5">
+          id={selectedReport}
+          title={currentReport?.label || ''}
+          description={currentReport?.description || ''}
+          headerExtra={selectedReport === 'balance-sheet' ? (
+            <div className="flex items-center gap-2">
               <label className="text-sm text-muted-foreground">ประเภท:</label>
               <select
                 value={balanceSheetTypeFilter}
@@ -600,294 +759,38 @@ export default function AccountingReportPage() {
                 <option value="ส่วนของผู้ถือหุ้น">ส่วนของผู้ถือหุ้น</option>
               </select>
             </div>
-          }
+          ) : undefined}
+          queryInfo={selectedReport === 'profit-loss' ? {
+            query: getProfitLossQuery(dateRange),
+            format: 'JSONEachRow'
+          } : selectedReport === 'balance-sheet' ? {
+            query: getBalanceSheetQuery(dateRange.end),
+            format: 'JSONEachRow'
+          } : selectedReport === 'cash-flow' ? {
+            query: getCashFlowQuery(dateRange),
+            format: 'JSONEachRow'
+          } : selectedReport === 'ar-aging' ? {
+            query: getARAgingQuery(),
+            format: 'JSONEachRow'
+          } : selectedReport === 'ap-aging' ? {
+            query: getAPAgingQuery(),
+            format: 'JSONEachRow'
+          } : selectedReport === 'revenue-breakdown' ? {
+            query: getRevenueBreakdownQuery(dateRange),
+            format: 'JSONEachRow'
+          } : selectedReport === 'expense-breakdown' ? {
+            query: getExpenseBreakdownQuery(dateRange),
+            format: 'JSONEachRow'
+          } : undefined}
+          onExportExcel={getExportFunction()}
         >
           {loading ? (
             <TableSkeleton rows={10} />
           ) : (
-            <PaginatedTable
-              data={balanceSheetTypeFilter === 'all' 
-                ? balanceSheetData 
-                : balanceSheetData.filter(item => item.typeName === balanceSheetTypeFilter)
-              }
-              columns={balanceSheetColumns}
-              itemsPerPage={15}
-              emptyMessage="ไม่มีข้อมูลงบดุล"
-              defaultSortKey="accountCode"
-              defaultSortOrder="asc"
-              keyExtractor={(item: BalanceSheetItem) => item.accountCode}
-              showSummary={true}
-              summaryConfig={{
-                
-                labelColSpan: 2,
-                values: {
-                  balance: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.balance, 0);
-                    return (
-                      <span className={`font-bold ${total >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        ฿{formatCurrency(total)}
-                      </span>
-                    );
-                  }
-                }
-              }}
-            />
+            renderReportContent()
           )}
         </DataCard>
       </ErrorBoundary>
-
-      {/* Cash Flow Table */}
-      <ErrorBoundary>
-        <DataCard
-          id="cash-flow"
-          title="งบกระแสเงินสด"
-          description="กระแสเงินสดจากกิจกรรมต่างๆ"
-          queryInfo={{
-            query: getCashFlowQuery(dateRange),
-            format: 'JSONEachRow'
-          }}
-          onExportExcel={() => exportStyledReport({
-            data: cashFlowData,
-            headers: { activityType: 'ประเภทกิจกรรม', revenue: 'เงินสดรับ', expenses: 'เงินสดจ่าย', netCashFlow: 'กระแสเงินสดสุทธิ' },
-            filename: 'รายงานงบกระแสเงินสด',
-            sheetName: 'Cash Flow',
-            title: 'รายงานงบกระแสเงินสด',
-            subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-            currencyColumns: ['revenue', 'expenses', 'netCashFlow'],
-            summaryConfig: {
-              columns: {
-                revenue: 'sum',
-                expenses: 'sum',
-                netCashFlow: 'sum',
-              }
-            }
-          })}
-        >
-          {loading ? (
-            <TableSkeleton rows={3} />
-          ) : (
-            <PaginatedTable
-              data={cashFlowData}
-              columns={cashFlowColumns}
-              itemsPerPage={10}
-              emptyMessage="ไม่มีข้อมูลกระแสเงินสด"
-              keyExtractor={(item: CashFlowData) => item.activityType}
-              showSummary={true}
-              summaryConfig={{
-                labelColSpan: 1,
-                values:{
-                  reverse:(data) => (
-                    <span className="text-green-600 font-bold">
-                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
-                    </span>
-                  ),                 
-                  expenses: (data) => (
-                    <span className="text-red-600 font-bold">
-                      ฿{formatCurrency(data.reduce((sum, item) => sum + item.expenses, 0))}   
-                    </span>
-                  ),
-                  netCashFlow: (data) => {
-                    const total = data.reduce((sum, item) => sum + item.netCashFlow, 0);
-                    return (
-                      <span className={`font-bold ${total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ฿{formatCurrency(total)}
-                      </span>
-                    );
-                  },
-                }
-              }}
-            />
-          )}
-        </DataCard>
-      </ErrorBoundary>
-
-      {/* AR & AP Aging Tables */}
-      <div className="grid gap-6 ">
-        <ErrorBoundary>
-          <DataCard
-            id="ar-aging"
-            title="อายุลูกหนี้ (AR Aging)"
-            description="รายการลูกหนี้ค้างชำระทั้งหมด"
-            queryInfo={{
-              query: getARAgingQuery(),
-              format: 'JSONEachRow'
-            }}
-            onExportExcel={() => exportStyledReport({
-              data: arAgingData,
-              headers: { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ลูกค้า', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
-              filename: 'รายงานอายุลูกหนี้',
-              sheetName: 'AR Aging',
-              title: 'รายงานอายุลูกหนี้ (AR Aging)',
-              subtitle: `ณ วันที่ ${new Date().toLocaleDateString('th-TH')}`,
-              currencyColumns: ['outstanding'],
-              summaryConfig: {
-                columns: {
-                  outstanding: 'sum',
-                }
-              }
-            })}
-          >
-            {loading ? (
-              <TableSkeleton rows={8} />
-            ) : (
-              <PaginatedTable
-                data={arAgingData}
-                columns={arAgingColumns}
-                itemsPerPage={10}
-                emptyMessage="ไม่มีลูกหนี้ค้างชำระ"
-                defaultSortKey="outstanding"
-                defaultSortOrder="desc"
-                keyExtractor={(item: AgingItem) => item.docNo}
-              />
-            )}
-          </DataCard>
-        </ErrorBoundary>
-
-        <ErrorBoundary>
-          <DataCard
-            id="ap-aging"
-            title="อายุเจ้าหนี้ (AP Aging)"
-            description="รายการเจ้าหนี้ค้างชำระทั้งหมด"
-            queryInfo={{
-              query: getAPAgingQuery(),
-              format: 'JSONEachRow'
-            }}
-            onExportExcel={() => exportStyledReport({
-              data: apAgingData,
-              headers: { docNo: 'เลขที่เอกสาร', code: 'รหัส', name: 'ซัพพลายเออร์', dueDate: 'วันครบกำหนด', outstanding: 'ยอดค้างชำระ', agingBucket: 'อายุหนี้' },
-              filename: 'รายงานอายุเจ้าหนี้',
-              sheetName: 'AP Aging',
-              title: 'รายงานอายุเจ้าหนี้ (AP Aging)',
-              subtitle: `ณ วันที่ ${new Date().toLocaleDateString('th-TH')}`,
-              currencyColumns: ['outstanding'],
-              summaryConfig: {
-                columns: {
-                  outstanding: 'sum',
-                }
-              }
-            })}
-          >
-            {loading ? (
-              <TableSkeleton rows={8} />
-            ) : (
-              <PaginatedTable
-                data={apAgingData}
-                columns={apAgingColumns}
-                itemsPerPage={10}
-                emptyMessage="ไม่มีเจ้าหนี้ค้างชำระ"
-                defaultSortKey="outstanding"
-                defaultSortOrder="desc"
-                keyExtractor={(item: AgingItem) => item.docNo}
-              />
-            )}
-          </DataCard>
-        </ErrorBoundary>
-      </div>
-
-      {/* Revenue & Expense Breakdown Tables */}
-      <div id="revenue-expense" className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        <ErrorBoundary>
-          <DataCard
-            title="รายได้ตามหมวด"
-            description="สัดส่วนรายได้แยกตามประเภทบัญชี"
-            queryInfo={{
-              query: getRevenueBreakdownQuery(dateRange),
-              format: 'JSONEachRow'
-            }}
-            onExportExcel={() => exportStyledReport({
-              data: revenueBreakdown,
-              headers: { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
-              filename: 'รายงานรายได้ตามหมวด',
-              sheetName: 'Revenue Breakdown',
-              title: 'รายงานรายได้ตามหมวด',
-              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-              currencyColumns: ['amount'],
-              percentColumns: ['percentage'],
-              summaryConfig: {
-                columns: {
-                  amount: 'sum',
-                }
-              }
-            })}
-          >
-            {loading ? (
-              <TableSkeleton rows={5} />
-            ) : (
-              <PaginatedTable
-                data={revenueBreakdown}
-                columns={revenueBreakdownColumns}
-                itemsPerPage={10}
-                emptyMessage="ไม่มีข้อมูลรายได้"
-                defaultSortKey="amount"
-                defaultSortOrder="desc"
-                keyExtractor={(item: CategoryBreakdown) => item.accountGroup}
-                showSummary={true}
-                summaryConfig={{
-                  labelColSpan: 2,
-                  values: {
-                    amount: (data) => (
-                      <span className="text-green-600 font-bold">
-                        ฿{formatCurrency(data.reduce((sum, item) => sum + item.amount, 0))}
-                      </span>
-                    ),
-                  },
-                }}
-              />
-            )}
-          </DataCard>
-        </ErrorBoundary>
-
-        <ErrorBoundary>
-          <DataCard
-            title="ค่าใช้จ่ายตามหมวด"
-            description="สัดส่วนค่าใช้จ่ายแยกตามประเภทบัญชี"
-            queryInfo={{
-              query: getExpenseBreakdownQuery(dateRange),
-              format: 'JSONEachRow'
-            }}
-            onExportExcel={() => exportStyledReport({
-              data: expenseBreakdown,
-              headers: { accountGroup: 'รหัสกลุ่ม', accountName: 'ชื่อบัญชี', amount: 'จำนวนเงิน', percentage: 'สัดส่วน (%)' },
-              filename: 'รายงานค่าใช้จ่ายตามหมวด',
-              sheetName: 'Expense Breakdown',
-              title: 'รายงานค่าใช้จ่ายตามหมวด',
-              subtitle: `ช่วงวันที่ ${dateRange.start} ถึง ${dateRange.end}`,
-              currencyColumns: ['amount'],
-              percentColumns: ['percentage'],
-              summaryConfig: {
-                columns: {
-                  amount: 'sum',
-                }
-              }
-            })}
-          >
-            {loading ? (
-              <TableSkeleton rows={5} />
-            ) : (
-              <PaginatedTable
-                data={expenseBreakdown}
-                columns={expenseBreakdownColumns}
-                itemsPerPage={10}
-                emptyMessage="ไม่มีข้อมูลค่าใช้จ่าย"
-                defaultSortKey="amount"
-                defaultSortOrder="desc"
-                keyExtractor={(item: CategoryBreakdown) => item.accountGroup}
-                showSummary={true}
-                summaryConfig={{
-                  labelColSpan: 2,
-                  values: {
-                    amount: (data) => (
-                      <span className="text-red-600 font-bold">
-                        ฿{formatCurrency(data.reduce((sum, item) => sum + item.amount, 0))}
-                      </span>
-                    ),
-                  },
-                }}
-              />
-            )}
-          </DataCard>
-        </ErrorBoundary>
-      </div>
     </div>
   );
 }
